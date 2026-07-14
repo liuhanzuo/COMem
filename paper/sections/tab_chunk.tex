@@ -2,6 +2,8 @@
 \begin{table}[t]
 \centering
 \small
+\setlength{\tabcolsep}{4pt}
+\resizebox{\columnwidth}{!}{%
 \begin{tabular}{@{}lccccc@{}}
 \toprule
 \textbf{chunk} & \textbf{read len} & \textbf{peak (64k)} & \textbf{prefill} & \textbf{decode} & \textbf{multikey} \\
@@ -11,7 +13,8 @@
 \textbf{512}  & 6{,}657  & 17.8\,GB & \textbf{7.83}$\times$ & 2.39\,s & \textbf{94} \\
 1024 & 13{,}313 & 19.8\,GB & 4.99$\times$ & 5.55\,s & 96 \\
 \bottomrule
-\end{tabular}
+\end{tabular}%
+}
 \caption{Chunk-size (block-size) ablation. Read length grows linearly with
 chunk ($k{=}12$ fixed), and write calls halve as chunk doubles (513/257/129/65
 at 64k), so larger chunks give faster prefill and higher multikey recall but a

@@ -3,6 +3,8 @@
 \begin{table}[t]
 \centering
 \small
+\setlength{\tabcolsep}{4pt}
+\resizebox{\columnwidth}{!}{%
 \begin{tabular}{@{}llcccc@{}}
 \toprule
 \textbf{Task} & \textbf{Len} & \textbf{BM25} & \textbf{Recency} & \textbf{ReaderAttn} & \textbf{Oracle} \\
@@ -19,7 +21,8 @@
                                 & 16k & 27.6 & 53.2 & \textbf{60.2} & 9.2 \\
                                 & 32k & \textbf{23.0} & 16.8 & 22.0 & 5.8 \\
 \bottomrule
-\end{tabular}
+\end{tabular}%
+}
 \caption{Chunk-selector ablation on RULER ($n{=}100$, best-top-$k$ peak recall
 over $k\in\{4,8,12,16,24\}$; CoMem $j{=}12$, chunk 1024, 32 slots). On both
 needle tasks the \emph{Oracle} selector (gold chunk always included) is

@@ -3,6 +3,8 @@
 \begin{table}[t]
 \centering
 \small
+\setlength{\tabcolsep}{4pt}
+\resizebox{\columnwidth}{!}{%
 \begin{tabular}{@{}lcccc@{}}
 \toprule
 & \multicolumn{3}{c}{single-pass} & \\
@@ -17,7 +19,8 @@
 niah\_single  & \multicolumn{4}{c}{100 $\to$ 100 (no effect)} \\
 niah\_multikey & \multicolumn{4}{c}{97--99 $\to$ 92 (slight hurt)} \\
 \bottomrule
-\end{tabular}
+\end{tabular}%
+}
 \caption{Iterative retrieval on RULER variable-tracking ($n{=}100$).
 Single-pass selectors collapse past 8k because one query cannot surface an
 entire reference chain; \texttt{iter\_bm25} (follow the variable chain,

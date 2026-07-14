@@ -3,6 +3,8 @@
 \begin{table}[t]
 \centering
 \small
+\setlength{\tabcolsep}{4pt}
+\resizebox{\columnwidth}{!}{%
 \begin{tabular}{@{}lccc@{}}
 \toprule
 \textbf{Task} & \textbf{Full attn.} & \textbf{Block-diag.} & \boldmath$\Delta$ \\
@@ -12,7 +14,8 @@ RULER niah\_multikey & \textbf{88 / 92} & 44 / 40 & $+$44 / $+$52 \\
 BABILong qa2         & 36 / 24 & 16 / 12 & $+$20 / $+$12 \\
 BABILong qa5         & 68 / 65 & 49 / 53 & $+$19 / $+$12 \\
 \bottomrule
-\end{tabular}
+\end{tabular}%
+}
 \caption{Cross-chunk attention ablation: recomputing \texttt{layers[$j$:]} with
 \emph{full} cross-pack attention vs.\ a \emph{block-diagonal} mask that reuses
 each chunk's KV without attending across chunks. Paired entries report two

@@ -2,6 +2,8 @@
 \begin{table*}[t]
 \centering
 \small
+\setlength{\tabcolsep}{4pt}
+\resizebox{\textwidth}{!}{%
 \begin{tabular}{@{}llccc@{}}
 \toprule
 \textbf{Benchmark} & \textbf{Task} & \textbf{CoMem} & \textbf{KV-Direct} & \textbf{HCache} \\
@@ -14,7 +16,8 @@ BABILong & bAbI long-doc QA & qa5 8k=\textbf{79}/16k=\textbf{67}/32k=\textbf{63}
 LongBench & real long-doc QA (F1) & AVG \textbf{9.58} (4 tasks) & AVG 10.13 & --- \\
 LoCoMo & long-dialogue memory (F1/acc) & \textbf{9.05}/24.1 & \textbf{8.72}/20.3 & \textbf{4.73}/6.4 \\
 \bottomrule
-\end{tabular}
+\end{tabular}%
+}
 \caption{Five-benchmark overview, Qwen3-8B, chunk 512, identical harness, per-task optimal top-$k$, official scorers. \textbf{KV-Direct = full-context accuracy} (forced $j{=}0$, no retrieval, all tokens; self-test vs.\ full forward $<10^{-4}$). Past the backbone's 40{,}960 extrapolation limit, full-context / KV-Direct collapse to 0 at 128k, while CoMem's constant $\approx$6.7k read stays in-window.}
 \label{tab:overview}
 \end{table*}

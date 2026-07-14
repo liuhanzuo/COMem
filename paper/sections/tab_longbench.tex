@@ -2,6 +2,8 @@
 \begin{table}[t]
 \centering
 \small
+\setlength{\tabcolsep}{4pt}
+\resizebox{\columnwidth}{!}{%
 \begin{tabular}{@{}lccc@{}}
 \toprule
 \textbf{Task} & \textbf{CoMem} ($k{=}12$) & \textbf{KV-Direct} & \textbf{Stock} (no LoRA) \\
@@ -13,7 +15,8 @@ hotpotqa    & 11.64 & 12.48 & --- \\
 \midrule
 \textbf{AVG} & \textbf{9.58} & 10.13 & --- \\
 \bottomrule
-\end{tabular}
+\end{tabular}%
+}
 \caption{LongBench F1 (official scorer, Qwen3-8B base, no chat template,
 chunk 512). All three methods land in a narrow 4--12 F1 band---the task is
 intrinsically hard for this backbone---and CoMem's AVG 9.58 tracks KV-Direct's
