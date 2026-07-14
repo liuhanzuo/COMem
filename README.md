@@ -59,10 +59,13 @@ answer = model.generate("What is X?",           # retrieve topk → resume → d
                         selector="bm25", topk=12, max_new_tokens=32)
 ```
 
-- `selector`: `auto` (**default for RULER**: picks per-task — `variable_tracking`
-  → `iter_bm25_adaptive`, every `niah_*` → `bm25` — so one command scores every
-  task correctly; passing any explicit selector overrides auto and applies it to
-  all tasks), `bm25` (lexical), `reader_attn` (cosine over `h_j`), `iter_bm25` /
+- `selector`: `iter_bm25_adaptive` (**default for RULER — the single universal
+  selector for all tasks**: it self-degrades via a confidence stop
+  (`--iter_conf_ratio`), so chain-free tasks (`niah_*`) stop after round 1
+  (== single-shot `bm25`) while chain tasks (`variable_tracking`) keep following
+  the VAR reference chain — one command scores every task correctly with no
+  per-task branching; pass an explicit `--selector` to override it on ALL tasks
+  for controls), `bm25` (lexical), `reader_attn` (cosine over `h_j`), `iter_bm25` /
   `iter_reader_attn` (multi-hop BFS for reference chains, e.g. RULER variable
   tracking), `iter_bm25_adaptive` (confidence-adaptive `iter_bm25`: no fixed
   `topk` budget — walk the chain until a hop's best score drops below
@@ -153,7 +156,7 @@ formula with a warning.
 
 ```bash
 # RULER   (NIAH + variable-tracking; synthetic length sweep)
-# --selector defaults to `auto`: vt -> iter_bm25_adaptive, niah_* -> bm25 (one command, all tasks correct)
+# --selector defaults to `iter_bm25_adaptive` (universal, all tasks): confidence stop auto-degrades to bm25 on niah_*, follows the chain on vt
 python -m eval.run --benchmark ruler --model /path/to/Qwen3-8B --j auto \
     --lengths 8k,16k,32k,64k,128k --n 100 --out ruler_results/qwen3_8b
 
