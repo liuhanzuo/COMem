@@ -32,7 +32,9 @@ from tqdm.auto import tqdm
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from comem import CoMem                          # noqa: E402
-from eval._common import load_backbone, resolve_baseline  # noqa: E402
+from eval import _cli                            # noqa: E402
+from eval._common import (load_backbone, resolve_baseline,  # noqa: E402
+                          dense_generate, DENSE_MODES)
 
 DATASET2PROMPT = {
     "narrativeqa": (
@@ -210,12 +212,13 @@ def run_scoring(output_dir, datasets_list):
 
 def main():
     p = argparse.ArgumentParser(description="CoMem LongBench eval")
-    p.add_argument("--model_path", default="")
-    p.add_argument("--resume_j", type=int, default=12)
+    p.add_argument("--model", "--model_path", dest="model_path", default="")
+    p.add_argument("--j", "--resume_j", dest="resume_j", type=_cli.j_type, default=12,
+                   help="split depth (int) or 'auto' (per-model, see model_registry)")
     p.add_argument("--top_prepay_b", type=int, default=0)
     p.add_argument("--reuse_kv_blockdiag", action="store_true", default=False)
-    p.add_argument("--lora_adapter", default="")
-    p.add_argument("--baseline", default="none", choices=["none", "kvdirect", "hcache"])
+    p.add_argument("--adapter", "--lora_adapter", dest="lora_adapter", default="")
+    p.add_argument("--baseline", default="none", choices=_cli.BASELINE_CHOICES)
     p.add_argument("--selector", default="bm25", choices=["bm25", "recency", "reader_attn"])
     p.add_argument("--topk", type=int, default=12)
     p.add_argument("--sink_tokens", default="bos", choices=["bos", "none"])
@@ -223,10 +226,10 @@ def main():
     p.add_argument("--tasks", nargs="+", default=None)
     p.add_argument("--data_dir", default="data/longbench_raw/data")
     p.add_argument("--hf_dataset", default="THUDM/LongBench")
-    p.add_argument("--max_samples", type=int, default=-1)
+    p.add_argument("--max_samples", "--n", dest="max_samples", type=int, default=-1)
     p.add_argument("--num_shards", type=int, default=1)
     p.add_argument("--shard_index", type=int, default=0)
-    p.add_argument("--output_dir", default="longbench_results/comem")
+    p.add_argument("--output_dir", "--out", dest="output_dir", default="longbench_results/comem")
     p.add_argument("--device", default="cuda:0")
     p.add_argument("--dtype", default="bfloat16", choices=["bfloat16", "float16", "float32"])
     p.add_argument("--attn_impl", default="sdpa")
@@ -238,8 +241,11 @@ def main():
         run_scoring(args.output_dir, datasets_list)
         return
 
+    _cli.normalize_args(args, task_attrs=("tasks",))
+    datasets_list = args.tasks if args.tasks else DEFAULT_DATASETS
     resume_j, no_retrieval, mode, lora = resolve_baseline(
         args.baseline, args.resume_j, args.lora_adapter)
+    dense_mode = mode if mode in DENSE_MODES else None
     model, tok = load_backbone(args.model_path, args.dtype, args.attn_impl,
                                args.device, lora)
     cm = CoMem(model, resume_j=resume_j, top_prepay_b=args.top_prepay_b,
@@ -271,11 +277,15 @@ def main():
             bare_q_ids = tok.encode((sample.get("input") or "").strip(),
                                     add_special_tokens=False)
             try:
-                pred = cm.generate_from_ids(
-                    input_ids, chunk_size=args.chunk_size, max_new_tokens=max_gen,
-                    selector=args.selector, topk=args.topk,
-                    sink_tokens=args.sink_tokens, bare_question_ids=bare_q_ids,
-                    no_retrieval=no_retrieval)
+                if dense_mode:
+                    pred = dense_generate(cm.model, tok, input_ids, dense_mode,
+                                          max_new_tokens=max_gen)
+                else:
+                    pred = cm.generate_from_ids(
+                        input_ids, chunk_size=args.chunk_size, max_new_tokens=max_gen,
+                        selector=args.selector, topk=args.topk,
+                        sink_tokens=args.sink_tokens, bare_question_ids=bare_q_ids,
+                        no_retrieval=no_retrieval)
             except RuntimeError as e:
                 if "out of memory" not in str(e).lower():
                     raise

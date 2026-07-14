@@ -30,7 +30,9 @@ from tqdm.auto import tqdm
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from comem import CoMem                          # noqa: E402
 from comem import selectors as _sel              # noqa: E402
-from eval._common import load_backbone, resolve_baseline  # noqa: E402
+from eval import _cli                            # noqa: E402
+from eval._common import (load_backbone, resolve_baseline,  # noqa: E402
+                          dense_generate, DENSE_MODES)
 
 CATEGORY_NAMES = {1: "multi_hop", 2: "single_hop", 3: "temporal",
                   4: "open_domain", 5: "adversarial"}
@@ -239,12 +241,13 @@ def run_scoring(output_dir):
 
 def main():
     p = argparse.ArgumentParser(description="CoMem LoCoMo eval")
-    p.add_argument("--model_path", default="")
-    p.add_argument("--resume_j", type=int, default=12)
+    p.add_argument("--model", "--model_path", dest="model_path", default="")
+    p.add_argument("--j", "--resume_j", dest="resume_j", type=_cli.j_type, default=12,
+                   help="split depth (int) or 'auto' (per-model, see model_registry)")
     p.add_argument("--top_prepay_b", type=int, default=0)
     p.add_argument("--reuse_kv_blockdiag", action="store_true", default=False)
-    p.add_argument("--lora_adapter", default="")
-    p.add_argument("--baseline", default="none", choices=["none", "kvdirect", "hcache"])
+    p.add_argument("--adapter", "--lora_adapter", dest="lora_adapter", default="")
+    p.add_argument("--baseline", default="none", choices=_cli.BASELINE_CHOICES)
     p.add_argument("--selector", default="bm25",
                    choices=["bm25", "recency", "oracle", "reader_attn"])
     p.add_argument("--topk", type=int, default=12)
@@ -253,8 +256,8 @@ def main():
     p.add_argument("--max_new_tokens", type=int, default=48)
     p.add_argument("--locomo_data", default="data/locomo10.json")
     p.add_argument("--categories", default=None)
-    p.add_argument("--output_dir", default="locomo_results/comem")
-    p.add_argument("--max_samples", type=int, default=-1)
+    p.add_argument("--output_dir", "--out", dest="output_dir", default="locomo_results/comem")
+    p.add_argument("--max_samples", "--n", dest="max_samples", type=int, default=-1)
     p.add_argument("--num_shards", type=int, default=1)
     p.add_argument("--shard_index", type=int, default=0)
     p.add_argument("--device", default="cuda:0")
@@ -267,8 +270,10 @@ def main():
         run_scoring(args.output_dir)
         return
 
+    _cli.normalize_args(args)
     resume_j, no_retrieval, mode, lora = resolve_baseline(
         args.baseline, args.resume_j, args.lora_adapter)
+    dense_mode = mode if mode in DENSE_MODES else None
     data_path = args.locomo_data
     model, tok = load_backbone(args.model_path, args.dtype, args.attn_impl,
                                args.device, lora)
@@ -303,12 +308,16 @@ def main():
         if not no_retrieval and args.selector == "oracle":
             needle_set = _oracle_needle_chunks(input_ids, sample, tok, args.chunk_size)
         try:
-            pred = cm.generate_from_ids(
-                input_ids, chunk_size=args.chunk_size,
-                max_new_tokens=args.max_new_tokens, selector=args.selector,
-                topk=args.topk, sink_tokens=args.sink_tokens,
-                needle_chunk_set=needle_set, bare_question_ids=bare_q_ids,
-                no_retrieval=no_retrieval)
+            if dense_mode:
+                pred = dense_generate(cm.model, tok, input_ids, dense_mode,
+                                      max_new_tokens=args.max_new_tokens)
+            else:
+                pred = cm.generate_from_ids(
+                    input_ids, chunk_size=args.chunk_size,
+                    max_new_tokens=args.max_new_tokens, selector=args.selector,
+                    topk=args.topk, sink_tokens=args.sink_tokens,
+                    needle_chunk_set=needle_set, bare_question_ids=bare_q_ids,
+                    no_retrieval=no_retrieval)
         except RuntimeError as e:
             if "out of memory" not in str(e).lower():
                 raise

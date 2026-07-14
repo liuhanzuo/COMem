@@ -33,7 +33,9 @@ from tqdm.auto import tqdm
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from comem import CoMem                          # noqa: E402
 from comem import selectors as _sel              # noqa: E402
-from eval._common import load_backbone, resolve_baseline  # noqa: E402
+from eval import _cli                            # noqa: E402
+from eval._common import (load_backbone, resolve_baseline,  # noqa: E402
+                          dense_generate, DENSE_MODES)
 
 _LENGTH_TOKENS = {"1k": 1024, "2k": 2048, "4k": 4096, "8k": 8192,
                   "16k": 16384, "32k": 32768, "64k": 65536, "128k": 131072}
@@ -101,31 +103,34 @@ def _oracle_needle_chunks(input_ids, expected_value, target_label, tokenizer, ch
 
 def main():
     p = argparse.ArgumentParser(description="CoMem LongEval eval")
-    p.add_argument("--model_path", required=True)
-    p.add_argument("--resume_j", type=int, default=12)
+    p.add_argument("--model", "--model_path", dest="model_path", required=True)
+    p.add_argument("--j", "--resume_j", dest="resume_j", type=_cli.j_type, default=12,
+                   help="split depth (int) or 'auto' (per-model, see model_registry)")
     p.add_argument("--top_prepay_b", type=int, default=0)
     p.add_argument("--reuse_kv_blockdiag", action="store_true", default=False)
-    p.add_argument("--lora_adapter", default="")
-    p.add_argument("--baseline", default="none", choices=["none", "kvdirect", "hcache"])
+    p.add_argument("--adapter", "--lora_adapter", dest="lora_adapter", default="")
+    p.add_argument("--baseline", default="none", choices=_cli.BASELINE_CHOICES)
     p.add_argument("--selector", default="bm25",
                    choices=["bm25", "recency", "oracle", "reader_attn"])
     p.add_argument("--topk", type=int, default=12)
     p.add_argument("--sink_tokens", default="bos", choices=["bos", "none"])
     p.add_argument("--chunk_size", type=int, default=512)
     p.add_argument("--lengths", nargs="+", default=["4k", "8k", "16k", "32k"])
-    p.add_argument("--num_samples", type=int, default=50)
+    p.add_argument("--num_samples", "--n", dest="num_samples", type=int, default=50)
     p.add_argument("--max_new_tokens", type=int, default=16)
     p.add_argument("--seed", type=int, default=1234)
     p.add_argument("--num_shards", type=int, default=1)
     p.add_argument("--shard_index", type=int, default=0)
-    p.add_argument("--output_dir", default="longeval_results/comem")
+    p.add_argument("--output_dir", "--out", dest="output_dir", default="longeval_results/comem")
     p.add_argument("--device", default="cuda:0")
     p.add_argument("--dtype", default="bfloat16", choices=["bfloat16", "float16", "float32"])
     p.add_argument("--attn_impl", default="sdpa")
     args = p.parse_args()
 
+    _cli.normalize_args(args)
     resume_j, no_retrieval, mode, lora = resolve_baseline(
         args.baseline, args.resume_j, args.lora_adapter)
+    dense_mode = mode if mode in DENSE_MODES else None
     model, tok = load_backbone(args.model_path, args.dtype, args.attn_impl,
                                args.device, lora)
     cm = CoMem(model, resume_j=resume_j, top_prepay_b=args.top_prepay_b,
@@ -157,12 +162,16 @@ def main():
                 needle_set = _oracle_needle_chunks(
                     input_ids, expected, target_label, tok, args.chunk_size)
             try:
-                out = cm.generate_from_ids(
-                    input_ids, chunk_size=args.chunk_size,
-                    max_new_tokens=args.max_new_tokens, selector=args.selector,
-                    topk=args.topk, sink_tokens=args.sink_tokens,
-                    needle_chunk_set=needle_set, bare_question_ids=bare_q_ids,
-                    no_retrieval=no_retrieval)
+                if dense_mode:
+                    out = dense_generate(cm.model, tok, input_ids, dense_mode,
+                                         max_new_tokens=args.max_new_tokens)
+                else:
+                    out = cm.generate_from_ids(
+                        input_ids, chunk_size=args.chunk_size,
+                        max_new_tokens=args.max_new_tokens, selector=args.selector,
+                        topk=args.topk, sink_tokens=args.sink_tokens,
+                        needle_chunk_set=needle_set, bare_question_ids=bare_q_ids,
+                        no_retrieval=no_retrieval)
             except RuntimeError as e:
                 if "out of memory" not in str(e).lower():
                     raise

@@ -31,10 +31,13 @@ from tqdm.auto import tqdm
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from comem import CoMem                          # noqa: E402
 from comem import selectors as _sel              # noqa: E402
-from eval._common import load_backbone, resolve_baseline, write_results_csv  # noqa: E402
+from eval import _cli                            # noqa: E402
+from eval._common import (load_backbone, resolve_baseline, write_results_csv,  # noqa: E402
+                          dense_generate, DENSE_MODES)
 
-from babilong.prompts import (  # noqa: E402
-    DEFAULT_PROMPTS, DEFAULT_TEMPLATE, get_formatted_input)
+# The `babilong` package (benchmark prompts + official metric) is imported lazily
+# inside main() so that --help / argparse work even when it is not installed.
+# Install it with `pip install babilong` (or add the babilong repo to PYTHONPATH).
 
 
 # --------------------------------------------------------------------------- #
@@ -95,12 +98,13 @@ def load_babilong_dataset(dataset_name, split_name, cache_dir=None):
 
 def main():
     p = argparse.ArgumentParser(description="CoMem BABILong eval")
-    p.add_argument("--model_path", required=True)
-    p.add_argument("--resume_j", type=int, default=6)
+    p.add_argument("--model", "--model_path", dest="model_path", required=True)
+    p.add_argument("--j", "--resume_j", dest="resume_j", type=_cli.j_type, default=6,
+                   help="split depth (int) or 'auto' (per-model, see model_registry)")
     p.add_argument("--top_prepay_b", type=int, default=0)
     p.add_argument("--reuse_kv_blockdiag", action="store_true", default=False)
-    p.add_argument("--lora_adapter", default="")
-    p.add_argument("--baseline", default="none", choices=["none", "kvdirect", "hcache"])
+    p.add_argument("--adapter", "--lora_adapter", dest="lora_adapter", default="")
+    p.add_argument("--baseline", default="none", choices=_cli.BASELINE_CHOICES)
     p.add_argument("--selector", default="bm25",
                    choices=["bm25", "recency", "oracle", "reader_attn",
                             "iter_reader_attn", "iter_bm25"])
@@ -110,13 +114,15 @@ def main():
     p.add_argument("--topk", type=int, default=4)
     p.add_argument("--sink_tokens", default="bos", choices=["bos", "none"])
     p.add_argument("--results_folder", default="./babilong_results")
-    p.add_argument("--output_name", required=True)
+    p.add_argument("--output_name", default=None)
+    p.add_argument("--out", dest="out", default=None,
+                   help="shorthand: <results_folder>/<output_name> as one dir path")
     p.add_argument("--dataset_name", default="RMT-team/babilong")
     p.add_argument("--tasks", nargs="+", default=["qa1", "qa2", "qa5"])
     p.add_argument("--lengths", nargs="+", default=["0k", "1k", "2k", "4k", "8k", "16k"])
     p.add_argument("--chunk_size", type=int, default=512)
     p.add_argument("--max_new_tokens", type=int, default=20)
-    p.add_argument("--limit", type=int, default=100)
+    p.add_argument("--limit", "--n", dest="limit", type=int, default=100)
     p.add_argument("--num_shards", type=int, default=1)
     p.add_argument("--shard_index", type=int, default=0)
     p.add_argument("--device", default="cuda:0")
@@ -124,8 +130,26 @@ def main():
     p.add_argument("--attn_impl", default="sdpa")
     args = p.parse_args()
 
+    try:
+        from babilong.prompts import (
+            DEFAULT_PROMPTS, DEFAULT_TEMPLATE, get_formatted_input)
+    except ImportError as e:
+        raise SystemExit(
+            "BABILong eval needs the `babilong` package (prompts + official "
+            "metric). Install it with `pip install babilong` or add the babilong "
+            f"repo to PYTHONPATH. ({e})")
+
+    _cli.normalize_args(args, task_attrs=("tasks",))
+    # --out <dir> is shorthand for --results_folder <dirname>/--output_name <base>
+    if args.out:
+        out = Path(args.out)
+        args.results_folder = str(out.parent) if out.parent != Path("") else "."
+        args.output_name = out.name
+    if not args.output_name:
+        args.output_name = "comem"
     resume_j, no_retrieval, mode, lora = resolve_baseline(
         args.baseline, args.resume_j, args.lora_adapter)
+    dense_mode = mode if mode in DENSE_MODES else None
     model, tok = load_backbone(args.model_path, args.dtype, args.attn_impl,
                                args.device, lora)
     cm = CoMem(model, resume_j=resume_j, top_prepay_b=args.top_prepay_b,
@@ -177,13 +201,17 @@ def main():
                         input_ids, target, tok, args.chunk_size)
                 bare_q_ids = tok.encode((question or "").strip(), add_special_tokens=False)
                 try:
-                    out = cm.generate_from_ids(
-                        input_ids, chunk_size=args.chunk_size,
-                        max_new_tokens=args.max_new_tokens, selector=args.selector,
-                        topk=args.topk, sink_tokens=args.sink_tokens,
-                        needle_chunk_set=needle_set, bare_question_ids=bare_q_ids,
-                        no_retrieval=no_retrieval, iter_rounds=args.iter_rounds,
-                        iter_hop_topk=args.iter_hop_topk, iter_score=args.iter_score)
+                    if dense_mode:
+                        out = dense_generate(cm.model, tok, input_ids, dense_mode,
+                                             max_new_tokens=args.max_new_tokens)
+                    else:
+                        out = cm.generate_from_ids(
+                            input_ids, chunk_size=args.chunk_size,
+                            max_new_tokens=args.max_new_tokens, selector=args.selector,
+                            topk=args.topk, sink_tokens=args.sink_tokens,
+                            needle_chunk_set=needle_set, bare_question_ids=bare_q_ids,
+                            no_retrieval=no_retrieval, iter_rounds=args.iter_rounds,
+                            iter_hop_topk=args.iter_hop_topk, iter_score=args.iter_score)
                 except RuntimeError as e:
                     if "out of memory" not in str(e).lower():
                         raise

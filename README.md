@@ -98,15 +98,106 @@ paper/           # LaTeX source
 
 Each `eval/*.py` builds a `CoMem`, runs `generate_from_ids` per sample (the fused
 encode+write+select+decode over one prompt whose trailing chunk is the query), and
-applies the benchmark's **official** metric. Example (RULER):
+applies the benchmark's **official** metric.
 
-```bash
-python -m eval.ruler --model_path /path/to/Qwen3-8B \
-    --resume_j 12 --selector bm25 --topk 12 \
-    --ruler_tasks niah_single niah_multi vt --lengths 4k 8k 16k 32k \
-    --limit 50 --output_dir ruler_results/comem_j12
+### One command, any cell
+
+Every driver shares one unified CLI, so a single habit works everywhere:
+
+```
+--model <hf_path_or_name>   --j <int|auto>   --lengths 8k,16k,32k,64k,128k
+--n <samples>   --selector bm25   --adapter <path|none>
+--baseline <none|dense|kvdirect|hcache|streamingllm>   --out <dir>
 ```
 
+Run through the dispatcher (routes `--benchmark` to the matching driver):
+
+```bash
+python -m eval.run --benchmark ruler --model /path/to/Qwen3-8B --j auto \
+    --lengths 8k,16k,32k --n 100 --selector bm25 --out ruler_results/qwen3_8b
+```
+
+…or the convenience wrapper (`--j auto` and env-override defaults):
+
+```bash
+./run_cell.sh ruler /path/to/Qwen3-8B --lengths 8k,16k,32k --n 100
+# env overrides: PYTHON_BIN=..  J=12  BASELINE=dense  SELECTOR=reader_attn
+```
+
+The old native flags (`--model_path`, `--resume_j`, `--limit`/`--num_samples`/
+`--max_samples`, `--output_dir`, space-separated lengths) still work as aliases.
+
+### Model → split depth (`--j auto`)
+
+`--j auto` picks the per-backbone split depth from `comem/model_registry.py`
+(`resume_j ≈ round(0.33 · num_hidden_layers)`); unknown models fall back to that
+formula with a warning.
+
+| Model         | Layers L | `--j` |
+|---------------|:--------:|:-----:|
+| Qwen3-0.6B    | 28       | 9     |
+| Qwen3-1.7B    | 28       | 9     |
+| Qwen3-4B      | 36       | 12    |
+| Qwen3-8B      | 36       | 12    |
+| Qwen3-14B     | 40       | 13    |
+| Qwen3-32B     | 64       | 21    |
+| Qwen3-30B-A3B | 48       | 16    |
+
+### One-line run per benchmark (copy-paste)
+
+```bash
+# RULER   (NIAH + variable-tracking; synthetic length sweep)
+python -m eval.run --benchmark ruler --model /path/to/Qwen3-8B --j auto \
+    --lengths 8k,16k,32k,64k,128k --n 100 --selector bm25 --out ruler_results/qwen3_8b
+
+# BABILong (qa1..qa10 x lengths; needs `pip install babilong`)
+python -m eval.run --benchmark babilong --model /path/to/Llama-3-8B --j auto \
+    --tasks qa1,qa2,qa5 --lengths 0k,1k,2k,4k,8k,16k --n 100 --out babilong_results/llama3_8b
+
+# LongBench (real long-doc QA; per-dataset SQuAD F1/EM)
+python -m eval.run --benchmark longbench --model /path/to/Qwen3-8B --j auto \
+    --tasks narrativeqa,qasper,hotpotqa,2wikimqa,musique,multifieldqa_en \
+    --out longbench_results/qwen3_8b
+
+# LongEval (LongChat lines-retrieval; exact-value accuracy)
+python -m eval.run --benchmark longeval --model /path/to/Qwen3-8B --j auto \
+    --lengths 4k,8k,16k,32k,64k,128k --n 50 --out longeval_results/qwen3_8b
+
+# LoCoMo (long-conversation memory QA; F1/EM/acc by category)
+python -m eval.run --benchmark locomo --model /path/to/Qwen3-8B --j auto \
+    --locomo_data data/locomo10.json --out locomo_results/qwen3_8b
+```
+
+`--lengths` applies to RULER / BABILong / LongEval (synthetic sweeps); LongBench
+and LoCoMo iterate their fixed datasets and use `--tasks` / `--locomo_data`.
+
+### Results & official scoring
+
+| Benchmark | Output (`--out`)                     | Metric / scorer |
+|-----------|--------------------------------------|-----------------|
+| RULER     | `<out>/{task}_{len}.csv` + `_summary.json` | `string_match` recall (RULER `string_match_all`; ref strings as case-insensitive substrings) |
+| BABILong  | `<out>/{task}_{len}_..._csv`         | official `babilong.metrics` — `TASK_LABELS` + `compare_answers` (**never** bare `re.search`) |
+| LongBench | `<out>/{ds}_*.jsonl` + `scores.json` | SQuAD-style token-F1 / EM (`--score_only` merges shards) |
+| LongEval  | `<out>/longeval_{len}.json` + `_summary.json` | exact-value match accuracy |
+| LoCoMo    | `<out>/preds*.jsonl` + `scores.json` | F1 / EM / substring-acc (cat-5 = abstention-correct; `--score_only` merges shards) |
+
 `eval/{longbench,longeval,locomo}.py` support `--score_only` to merge shards.
-Head-to-head baselines: `--baseline {kvdirect,hcache}`. LoRA distillation:
-`train/distill.py` then eval with `--lora_adapter <dir>`.
+Baselines: `--baseline {dense,kvdirect,hcache,streamingllm}` (`dense` = stock
+full-context generation; `streamingllm` = sink+sliding-window truncation then
+dense; `kvdirect`/`hcache` = no-retrieval CoMem packs). LoRA distillation:
+`train/distill.py` then eval with `--adapter <dir>`.
+
+### Division of labor
+
+Eval is a fixed pipeline; only *(model, j, benchmark, length, selector, baseline)*
+vary. Suggested split: **one person owns one model column** (`--model X --j auto`)
+and sweeps all five benchmarks × all baselines for it, e.g.
+
+```bash
+for B in ruler babilong longbench longeval locomo; do
+  for BASE in none dense kvdirect hcache streamingllm; do
+    ./run_cell.sh $B /path/to/Qwen3-8B --baseline $BASE --out results/qwen3_8b/$B/$BASE
+  done
+done
+```
+
