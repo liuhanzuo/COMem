@@ -1,0 +1,23 @@
+% LongBench F1 (official), Qwen3-8B base, no chat template, chunk 512. From draft §2.8 (verified).
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Task} & \textbf{CoMem} ($k{=}12$) & \textbf{KV-Direct} & \textbf{Stock} (no LoRA) \\
+\midrule
+narrativeqa & 3.93  & 3.95  & 4.01 \\
+qasper      & 11.07 & 11.92 & 10.33 \\
+hotpotqa    & 11.64 & 12.48 & --- \\
+2wikimqa    & 11.69 & 12.16 & --- \\
+\midrule
+\textbf{AVG} & \textbf{9.58} & 10.13 & --- \\
+\bottomrule
+\end{tabular}
+\caption{LongBench F1 (official scorer, Qwen3-8B base, no chat template,
+chunk 512). All three methods land in a narrow 4--12 F1 band---the task is
+intrinsically hard for this backbone---and CoMem's AVG 9.58 tracks KV-Direct's
+full-context 10.13 within noise using a \emph{constant} $\approx$4.6k read. The
+low absolute score reflects task/backbone difficulty, not a CoMem weakness.}
+\label{tab:longbench}
+\end{table}

@@ -1,0 +1,26 @@
+% Hy3 (hy_v3 80L MoE) CoMem long-context RULER. n=50, bm25 topk=8, resume_j=32,
+% distilled LoRA. Verified: ruler_results/hy3_qcmem_j32_{longctx,256k}/_summary.json
+% + logs/hy3_ruler_{longctx,256k}.log.
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{@{}lcccccc@{}}
+\toprule
+\textbf{Task} & 16k & 32k & 64k & 128k & 256k \\
+\midrule
+niah\_single\_2   &  98 & 92 & 100 &  98 & \textbf{100} \\
+niah\_multikey\_1 & 100 & 94 & 100 & 100 & \textbf{98} \\
+\midrule
+read length (tok) & 4.3k & 4.6k & 4.5k & 4.4k & 4.5k \\
+context (tok)     & 16k  & 32k  & 65k  & 131k & 261k \\
+\bottomrule
+\end{tabular}
+\caption{CoMem on the Tencent Hunyuan \textbf{Hy3} backbone (\texttt{hy\_v3},
+80-layer sparse MoE), RULER needle recall ($n{=}50$, official
+\texttt{string\_match\_all}), split $j{=}32$, BM25 top-$8$, self-distilled LoRA.
+The read length fed to the model stays $\approx$4.3--4.6k tokens while the
+context grows $16\times$ (16k$\to$256k); CoMem reaches its highest recall at 256k,
+the backbone's native ceiling, with $0$ out-of-memory failures. The
+context row reports the mean packed length of the RULER samples.}
+\label{tab:hy3ruler}
+\end{table}

@@ -1,0 +1,79 @@
+\section{Introduction}
+\label{sec:intro}
+A large language model does not use its depth uniformly. A growing body of
+interpretability work, and our own analysis (\S\ref{sec:motivation}), finds a
+\emph{division of labor} along the layer stack: the lower layers assemble a
+semantic representation of the input---what the text \emph{means}---while the
+upper layers convert that representation into a next-token distribution---what
+to \emph{say} next \citep{stagesofinference}. Two properties make this more than
+a curiosity. First, it is \emph{early}: within roughly the first third of the
+layers a chunk's semantics are already formed, and layer-wise probes, causal
+truncation, and split-depth sweeps all place the ceiling of ``understanding''
+well below the top of the network. Second, it is \emph{sharp and cross-family}:
+the same shape holds on Qwen3-8B, Llama-3, and an 80-layer Hunyuan
+Mixture-of-Experts.
+
+This finding has a consequence that, to our knowledge, has not been exploited
+for long-context memory. If understanding a chunk is finished by a mid depth
+$j$, then everything the lower layers computed is recoverable from a single
+tensor---the depth-$j$ residual hidden---and the chunk's full-depth key--value
+cache need not be stored at all. One caches that one hidden and recomputes the
+upper layers $[j{:}L]$ on demand.
+
+The payoff is largest for long context, which is bottlenecked twice. First,
+full self-attention costs $O(L^2)$ to prefill and $O(L)$ in KV memory. Second,
+and more fundamentally, once the context exceeds the backbone's RoPE
+extrapolation limit accuracy does not merely degrade---it \emph{collapses}: on
+Qwen3-8B~\citep{qwen3} (native window $40{,}960$; the config's $131{,}072$ is an
+un-enabled YaRN ceiling), feeding 128k tokens drives RULER needle accuracy to
+$0$. Methods that reuse or evict KV, or that retrieve, attack the first
+bottleneck but inherit the second: they still recompute or attend over a length
+that scales with the context. Caching one mid-layer hidden per chunk and
+retrieving a fixed number of them instead makes both the read computation
+\emph{and} the memory constant in context length. Concretely, for a transformer
+of $L$ layers split at depth $j$:
+\begin{itemize}[leftmargin=1.2em,itemsep=1pt]
+\item \textbf{Write} each 512-token chunk through the bottom layers $[0{:}j]$
+and cache its depth-$j$ residual hidden $h_j$ (chunk-local RoPE); storage is
+$\approx$$1/(2L)$ of a full KV cache.
+\item \textbf{Read} by retrieving the top-$k$ chunks (BM25), packing
+\texttt{[sink; selected $h_j$; query $h_j$]}, and recomputing only the upper
+layers $[j{:}L]$ under fresh RoPE. The pack is a fixed $\approx$6.7k tokens
+regardless of context length.
+\end{itemize}
+The split $j$ is a knob: $j{=}0$ is exact full RAG recompute (equal to the full
+forward, $\max|\Delta\text{logit}|<10^{-4}$), $j{=}L$ is closed-book. We call
+the resulting system \textbf{CoMem} (Comprehension Memory). Our contributions:
+\begin{itemize}[leftmargin=1.2em,itemsep=2pt]
+\item \textbf{An early, sharp understand-then-generate division of labor,
+established directly.} Layer-wise probes (semantics peak mid-stack, next-token
+forms at top), causal truncation (the first 4--8 layers already reach $95\%$ of
+full downstream semantics), and zero-training split-depth sweeps together place
+the ``understanding'' ceiling at $\approx$$0.33$--$0.40\cdot L$, consistently
+across Qwen3-8B, Llama-3, and an 80-layer MoE (\S\ref{sec:motivation}).
+\item \textbf{A new kind of long-context memory (the layer axis).} We recast
+long-context reuse from the \emph{token axis} (recompute a subset of tokens at
+full depth, \`{a} la RAG / KV-reuse) to the \emph{layer axis}: where prior
+long-context memories store tokens, parametric slots, or full-layer KV, CoMem
+stores one depth-$j$ comprehension hidden per chunk ($\approx$$1/72$ of a full
+KV cache) and recomputes only $[j{:}L]$, making read cost and memory
+\emph{constant} in context length ($\approx$6.7k tokens / $\approx$17--18\,GB).
+\item \textbf{CoMem is the only method usable past the extrapolation limit.} At
+128k, full-context and full-KV baselines collapse to $0$ / OOM (the packed
+length exceeds the native window, so RoPE breaks); CoMem holds RULER niah $100$
+and LongEval $0.98$, at a $7.83\times$ prefill speedup and constant
+$\approx$18\,GB, with the crossover near 16k.
+\item \textbf{An exact, cross-family partition with light self-distillation.}
+The $j{=}0$ read equals the full forward to $\max|\Delta\text{logit}|<10^{-4}$
+on a dense 8B and to \emph{exactly} $0.0$ through the routing of a 597\,GB
+80-layer MoE~\citep{hunyuan}; a LoRA self-distill on plain PG19 (no synthetic
+long-context data) pushes the usable split from $j{\le}9$ to $j{\ge}12$.
+\item \textbf{A retrieval readout that scales to multi-hop.} A forward-free
+iterative selector (\texttt{iter\_bm25}) follows reference chains and lifts
+variable-tracking from $20$--$28$ to $92$--$97$ (non-degrading with length),
+while cross-chunk full-attention recompute is shown load-bearing for multi-fact
+disambiguation.
+\end{itemize}
+Section~\ref{sec:motivation} establishes the division of labor and derives each
+design choice from it; \S\ref{sec:method} details CoMem; \S\ref{sec:experiments}
+reports results across five long-context benchmarks.

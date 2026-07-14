@@ -1,0 +1,33 @@
+% Selector ablation, RULER n=100, best-topk peak recall over topk in {4,8,12,16,24}.
+% CoMem config: j=12, chunk_size=1024, 32 slots. From QCMEM_SELECTOR_COMPARISON.md (verified).
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{@{}llcccc@{}}
+\toprule
+\textbf{Task} & \textbf{Len} & \textbf{BM25} & \textbf{Recency} & \textbf{ReaderAttn} & \textbf{Oracle} \\
+\midrule
+\multirow{3}{*}{niah\_single}   & 8k  & \textbf{100} & 100 & 100 & 100 \\
+                                & 16k & \textbf{100} & 72  & 83  & 100 \\
+                                & 32k & \textbf{100} & 42  & 38  & 100 \\
+\midrule
+\multirow{3}{*}{niah\_multikey} & 8k  & 95 & 95 & 93 & \textbf{100} \\
+                                & 16k & 97 & 61 & 69 & \textbf{100} \\
+                                & 32k & 99 & 44 & 41 & \textbf{100} \\
+\midrule
+\multirow{3}{*}{var-track}      & 8k  & \textbf{97.8} & 95.6 & 96.4 & 10.4 \\
+                                & 16k & 27.6 & 53.2 & \textbf{60.2} & 9.2 \\
+                                & 32k & \textbf{23.0} & 16.8 & 22.0 & 5.8 \\
+\bottomrule
+\end{tabular}
+\caption{Chunk-selector ablation on RULER ($n{=}100$, best-top-$k$ peak recall
+over $k\in\{4,8,12,16,24\}$; CoMem $j{=}12$, chunk 1024, 32 slots). On both
+needle tasks the \emph{Oracle} selector (gold chunk always included) is
+\textbf{100} at every length, so the compressed depth-$j$ read-out is lossless
+and the long-range gap is entirely a \emph{retrieval} problem---BM25 nearly
+closes it ($\le$5\,pp on multikey, 0\,pp on single). Variable-tracking is a
+different regime: the Oracle ``single answer chunk'' is ill-defined for an
+$N$-hop assignment chain, so it scores far below BM25; this motivates the
+iterative selector (Table~\ref{tab:itervt}).}
+\label{tab:selector}
+\end{table}

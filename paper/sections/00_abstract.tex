@@ -1,0 +1,32 @@
+\begin{abstract}
+A transformer processes its input in two phases along \emph{depth}: the lower
+layers build a semantic representation of the text, and the upper layers turn
+that representation into a next-token prediction. We give direct
+evidence---layer-wise probes, causal layer-truncation, and split-depth
+recomputation sweeps across three model families (Qwen3-8B, Llama-3, and an
+80-layer Hunyuan Mixture-of-Experts)---that this \emph{understand-then-generate}
+division of labor is sharp and early: semantic content saturates within roughly
+the first third of the stack, while next-token ability forms only near the top.
+This finding has an immediate systems consequence. If the lower layers have
+already finished understanding a chunk of text, their entire contribution can be
+summarized by the single residual hidden state at a split depth $j$, cached
+once, and the upper layers $[j{:}L]$ recomputed on demand---so the full-depth
+key--value cache of the chunk need never be stored. We build \textbf{CoMem}
+(Comprehension Memory) on this principle: write each chunk through layers
+$[0{:}j]$ and store its depth-$j$ hidden ($\approx$$1/(2L)$ of a full KV cache);
+at read time retrieve the top-$k$ relevant chunk hiddens and recompute only
+$[j{:}L]$. CoMem is thus a long-context \emph{memory} of a new kind: where prior
+memories retain tokens (KV eviction), parametric slots (recurrent/memory
+models), or the full-layer KV of retrieved blocks, CoMem retains a single
+\emph{comprehension} hidden per chunk---the layer at which understanding is
+already complete. Read cost and memory become \emph{constant} in context length
+($\approx$6.7k tokens / $\approx$18\,GB for an 8B backbone). Because the
+retrieved pack always fits inside the native window, CoMem is the only method
+that still works past the backbone's extrapolation limit: at 128k, full-context
+and full-KV recompute collapse to 0 (and OOM at 256k) while CoMem holds
+RULER~100 and LongEval~0.98, with a $7.83\times$ prefill speedup. The depth
+partition is numerically exact (max $|\Delta\text{logit}|{=}0$ through the
+80-layer MoE's routing), and a light self-distilled LoRA on plain text pushes
+the usable split deeper with no synthetic data. Long-context memory, we argue,
+is a layer-partition problem, not a token-budget problem.
+\end{abstract}

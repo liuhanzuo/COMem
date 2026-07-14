@@ -1,0 +1,24 @@
+% LongEval (LongChat lines-retrieval), n=50, best-topk tk4-6. From draft §2.7 (verified).
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+\textbf{Len} & \textbf{CoMem} (best $k$) & \textbf{KV-Direct} & \textbf{HCache} & \textbf{read len} \\
+\midrule
+8k   & \textbf{1.00} & 1.00 & 0.00 & $\approx$2.2k \\
+16k  & 0.96 & 0.96 & 0.00 & $\approx$2.2k \\
+32k  & \textbf{1.00} & 0.92 & 0.00 & $\approx$2.2k \\
+64k  & \textbf{0.94} & 0.34 & 0.00 & $\approx$2.3k \\
+128k & \textbf{0.98} & \textbf{0.00} & 0.00 & $\approx$3.4k \\
+\bottomrule
+\end{tabular}
+\caption{LongEval lines-retrieval ($n{=}50$, per-task optimum
+$k\in\{4,6\}$; a fixed $k{=}12$ under-reads to 0.70). CoMem \emph{matches}
+KV-Direct in-window (8k/16k/32k $=$ 1.00/0.96/1.00) and \emph{reverses sharply}
+past the extrapolation limit (64k 0.94 vs.\ 0.34; 128k 0.98 vs.\ 0.00, where
+KV-Direct's $\sim$130k packed tokens break RoPE). CoMem's read length is
+constant $\approx$2--3k; HCache (no retrieval) is all-0, the needle drowning
+without a selector.}
+\label{tab:longeval}
+\end{table}

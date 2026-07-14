@@ -1,0 +1,19 @@
+% Efficiency, median-of-3, chunk 512. From draft §2.3 (verified).
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Length} & \textbf{Prefill speedup} & \textbf{Full mem} & \textbf{CoMem mem} \\
+ & (full/CoMem) & & \\
+\midrule
+8k & 0.97$\times$ & 20\,GB & 17.3\,GB \\
+16k & 1.59$\times$ & 25\,GB & 17.4\,GB \\
+32k & 2.48$\times$ & 34\,GB & 17.5\,GB \\
+64k & 4.36$\times$ & 52\,GB & 17.8\,GB \\
+128k & \textbf{7.83}$\times$ & 89\,GB & \textbf{18.3\,GB} \\
+\bottomrule
+\end{tabular}
+\caption{Efficiency (median-of-3, chunk 512). CoMem memory is context-independent ($\approx$17--18\,GB); full attention grows to 89\,GB and OOMs where CoMem still runs. Crossover $\approx$16k.}
+\label{tab:eff}
+\end{table}

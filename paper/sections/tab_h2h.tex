@@ -1,0 +1,28 @@
+% RULER NIAH head-to-head, n=50, string_match_all. From draft §2.1 (verified).
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+\textbf{Method} & 8k & 16k & 32k & 64k & 128k \\
+\midrule
+\multicolumn{6}{@{}l}{\textit{niah\_single\_2}} \\
+\textbf{CoMem} & 100 & 100 & 100 & 100 & \textbf{100} \\
+KV-Direct & 100 & 100 & 100 & 100 & \textbf{0} \\
+HCache & 34 & 2 & 4 & 2 & --- \\
+MemoryLLM & 22 & 22 & 28 & --- & --- \\
+\midrule
+\multicolumn{6}{@{}l}{\textit{niah\_multikey\_1} (CoMem = fixed top-12)} \\
+\textbf{CoMem} & 96 & 98 & 90 & 86 & \textbf{96} \\
+KV-Direct & 100 & 100 & 98 & 80 & \textbf{0} \\
+HCache & 4 & 0 & 0 & --- & --- \\
+MemoryLLM & 30 & 14 & 18 & --- & --- \\
+\midrule
+\multicolumn{6}{@{}l}{\textit{read length (tokens fed to model, 128k)}} \\
+CoMem & \multicolumn{5}{c}{$\approx$6{,}256 (constant)} \\
+KV-Direct & \multicolumn{5}{c}{$\approx$130{,}746 ($O(L)$)} \\
+\bottomrule
+\end{tabular}
+\caption{RULER NIAH head-to-head, Qwen3-8B, $n{=}50$. Same harness/backbone/scorer; only the primitive varies. CoMem matches KV-Direct in-window but with constant read, dominates HCache and MemoryLLM, and is the only method usable at 128k.}
+\label{tab:h2h}
+\end{table}

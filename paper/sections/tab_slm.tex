@@ -1,0 +1,22 @@
+% StreamingLLM equal-budget comparison, RULER niah_single, n=50.
+% From draft §2.2 (verified): CoMem 100/100/100/100 vs SLM 90/42/16/4.
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+\textbf{Method} & 8k & 16k & 64k & 128k \\
+\midrule
+\textbf{CoMem} (retrieved $h_j$) & \textbf{100} & \textbf{100} & \textbf{100} & \textbf{100} \\
+StreamingLLM (recent tokens) & 90 & 42 & 16 & 4 \\
+\bottomrule
+\end{tabular}
+\caption{Equal-budget comparison on RULER niah\_single ($n{=}50$,
+\texttt{string\_match\_all}). Both methods are held to the same fixed
+$\approx$6.7k-token / $\approx$17\,GB budget; the only difference is
+\emph{which} tokens are kept. StreamingLLM~\citep{streamingllm} keeps the most
+\emph{recent} tokens and loses the middle of the context, so the needle is
+missed as length grows (a $25\times$ gap at 128k); CoMem retrieves the
+\emph{relevant} chunk hiddens and holds at 100.}
+\label{tab:slm}
+\end{table}

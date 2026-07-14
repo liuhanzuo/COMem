@@ -1,0 +1,40 @@
+% QCMem — ACL ARR submission (main file)
+% Structure: main.tex + sections/*.tex + qcmem.bib
+% Drop into Overleaf ARR project (acl.sty / acl_natbib.bst included).
+% Compile: pdflatex -> bibtex -> pdflatex x2. Numbers verified vs status/QCMEM_PAPER_DRAFT.md.
+
+\documentclass[11pt]{article}
+\usepackage[review]{acl}          % ARR: [review] for submission; remove for camera-ready
+\usepackage{times}
+\usepackage{latexsym}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{microtype}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{multirow}
+\usepackage{enumitem}
+
+\title{Understanding Is Done Early: A Depth Division of Labor in Large
+Language Models and Its Use for Unbounded-Context Memory}
+
+\author{Anonymous ARR submission}
+
+\begin{document}
+\maketitle
+
+\input{sections/00_abstract}
+\input{sections/01_introduction}
+\input{sections/02_related}
+\input{sections/03_motivation}
+\input{sections/04_methodology}
+\input{sections/05_experiments}
+\input{sections/06_conclusion}
+\input{sections/07_limitations}
+
+\bibliography{qcmem}
+\bibliographystyle{acl_natbib}
+
+\end{document}

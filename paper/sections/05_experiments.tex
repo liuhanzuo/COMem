@@ -1,0 +1,238 @@
+\section{Experiments}
+\label{sec:experiments}
+
+\paragraph{Models.} Unless noted, the backbone is \textbf{Qwen3-8B}~\citep{qwen3}
+(36 layers), operating at split $j{=}12$ with chunk size 512. Its native context
+window is \textbf{40{,}960} tokens (\texttt{max\_position\_embeddings}); the
+often-quoted 131{,}072 is an \emph{un-activated} YaRN extrapolation limit, so
+$>$41k inputs already fall outside the trained regime. We use
+\textbf{Llama-3}~\citep{llama3} for cross-family probing, and port CoMem to the
+Tencent \textbf{Hunyuan Hy3}~\citep{hunyuan} 80-layer sparse
+Mixture-of-Experts model ($\approx$597\,GB bf16, native 262{,}144 window,
+$j{\approx}32$) to test the depth partition at MoE scale
+(\S\ref{sec:hy3-general}).
+
+\paragraph{Baselines.} All baselines share the identical harness, backbone, and
+scorer---the only variable is the tested primitive.
+\textbf{KV-Direct}~\citep{kvdirect} is our \emph{full-context reference}: it
+forces $j{=}0$ (full-depth recompute), performs no retrieval, and keeps all
+tokens; its read equals the full forward to $\max|\Delta\text{logit}|<10^{-4}$,
+so a KV-Direct collapse \emph{is} a full-context collapse. \textbf{HCache}~\citep{hcache}
+caches mid-layer activations and recomputes upper layers post-hoc, but with
+\emph{no retrieval and no training}---it isolates the value of retrieval.
+\textbf{MemoryLLM}~\citep{memoryllm} is a dedicated fixed-size parametric memory
+bank with FIFO eviction (a same-class memory model). \textbf{StreamingLLM}~\citep{streamingllm}
+is held to the \emph{same} fixed $\approx$6.7k-token budget as CoMem but keeps
+only the most recent tokens.
+
+\paragraph{Evaluation \& metrics.} RULER uses official
+\texttt{string\_match\_all}; BABILong uses the official
+\texttt{compare\_answers} (not a \texttt{re.search} regex, which over-counts);
+LongBench~\citep{longbench} uses official F1; LoCoMo~\citep{locomo} reports F1 and accuracy. Retrieval $k$ is set
+per task: long-context retrieval has a task-dependent optimum and a fixed
+default \emph{systematically underestimates} CoMem (e.g.\ LongEval at $k{=}12$
+reads to 0.70 vs.\ 1.00 at $k{\in}\{4,6\}$). The RULER NIAH head-to-head
+(Table~\ref{tab:h2h}) is $n{=}50$; all other tables are $n{=}100$ unless stated.
+The three 128k \texttt{niah\_multikey} values reported below use different top-$k$
+conventions and are \emph{not} contradictory: \textbf{98} (best-top-$k$, $k{=}8$;
+overview), \textbf{96} (fixed $k{=}12$; head-to-head), and \textbf{84}
+(length-adaptive $k{=}24$; scaling).
+
+\paragraph{Hardware.} All timing is median-of-3 on a single 80\,GB GPU (Hy3 is
+sharded across 8 GPUs with \texttt{device\_map="auto"}), chunk size 512.
+
+\subsection{Five-benchmark overview}
+Table~\ref{tab:overview} summarizes the five benchmarks. The single recurring
+pattern: within the backbone's extrapolation window CoMem matches the
+full-context reference at a \emph{constant} read, and past it (128k) CoMem is
+the \emph{only} usable method, since full-context / KV-Direct collapse to 0
+once their packed length exceeds the 40{,}960 window and RoPE extrapolation
+breaks.
+
+\input{sections/tab_overview}
+
+\subsection{Head-to-head on RULER NIAH}
+Table~\ref{tab:h2h} isolates the primitive on RULER needle tasks ($n{=}50$,
+\texttt{string\_match\_all}). Three findings. (i) \emph{vs.\ HCache: accuracy
+collapse}---without retrieval the needle is drowned; HCache is already at 34 by
+8k and near 0 on multikey. (ii) \emph{vs.\ MemoryLLM: dominated}---the
+same-class fixed-memory model reaches only 22--28 (single) / 14--30 (multikey)
+vs.\ CoMem's 90--100. (iii) \emph{vs.\ KV-Direct: equal accuracy, constant cost,
+and uniquely usable at 128k}. Below the extrapolation limit both are
+near-perfect, but CoMem's read length is a constant $\approx$6.3k vs.\
+KV-Direct's full $\sim$130k tokens; at 128k KV-Direct collapses to 0 (its
+$\sim$130{,}746 packed tokens exceed the native 40{,}960 window) while CoMem
+stays at 100/96. This is a structural advantage of layer-partial{+}retrieval,
+not merely a memory saving.
+
+\input{sections/tab_h2h}
+
+\subsection{Equal-budget comparison with StreamingLLM}
+Table~\ref{tab:slm} pins CoMem and StreamingLLM to the \emph{same}
+$\approx$6.7k-token / $\approx$17\,GB budget, so the only difference is
+\emph{which} tokens are retained. Keeping the most recent tokens
+(StreamingLLM) discards the middle of the context and loses the needle as
+length grows: 90/42/16/4 at 8k/16k/64k/128k. Retrieving the relevant chunk
+hiddens (CoMem) holds at 100/100/100/100---a $25\times$ gap at 128k. Fixed budget
+is necessary but not sufficient; \emph{relevance-based} selection is what makes
+the budget work.
+
+\input{sections/tab_slm}
+
+\subsection{Scaling past the extrapolation limit}
+Table~\ref{tab:scaling} scales RULER to 256k. The watershed is the backbone's
+extrapolation limit (Qwen 64k$\to$128k): beyond it only CoMem is usable
+(niah\_single 128k/256k $=$ 100/98 vs.\ full-ctx 0/OOM). Multi-hop
+variable-tracking is the honest weak spot of single-pass retrieval here
+(64k $=$ 21); we return to it in Table~\ref{tab:itervt}.
+
+\input{sections/tab_scaling}
+
+\subsection{Efficiency}
+Table~\ref{tab:eff} (median-of-3). CoMem prefill is write $O(L)$ plus a fixed
+read; full attention is $O(L^2)$, crossing over near 16k and reaching
+$7.83\times$ at 128k. Memory is context-independent at $\approx$17--18\,GB
+(full grows to 89\,GB), so CoMem runs the 128k setting on a single GPU where
+full-context OOMs. The cost is a slower decode ($\approx$2.4\,s/step,
+recomputing $[j{:}L]$ over the pack), which is optimizable with a resumed-band
+KV cache.
+
+\input{sections/tab_eff}
+
+\subsection{Ablations}
+\paragraph{The selector, not the read-out, is the long-range bottleneck.}
+Table~\ref{tab:selector} sweeps four chunk selectors. Given the gold chunk, the
+\emph{Oracle} selector is \textbf{100} on both needle tasks at every length: the
+depth-$j$ compressed read-out is \emph{lossless}, and the entire long-range gap
+is a retrieval problem. BM25 nearly closes that gap ($\le$5\,pp on multikey,
+0\,pp on single), validating it as the default. Recency and reader-attention are
+substantially weaker at 16k--32k and need large $k$ to partially recover. The
+exception is variable-tracking, whose Oracle is ill-defined (the answer chunk
+alone does not carry an $N$-hop chain), motivating the next ablation.
+
+\input{sections/tab_selector}
+
+\paragraph{Iterative retrieval for multi-hop chains.}
+Table~\ref{tab:itervt} addresses variable-tracking. A single retrieval pass
+collapses past 8k (16k $=$ 27.6, 32k $=$ 23.0) because one query cannot surface a
+whole reference chain. The forward-free \texttt{iter\_bm25} variant---retrieve,
+read the referenced variable, re-retrieve, with no training---lifts recall to
+92--97 and is \emph{non-degrading} with length. The gain is correctly scoped: it
+is inert on independent single needles (100$=$100) and slightly hurts multi-key
+disambiguation (97--99$\to$92), so it is applied only to reference-chain tasks.
+
+\input{sections/tab_itervt}
+
+\paragraph{Cross-chunk attention is load-bearing.}
+Table~\ref{tab:crosschunk} compares the READ recompute of $[j{:}L]$ with
+\emph{full} cross-pack attention against a \emph{block-diagonal} mask that reuses
+each chunk's KV without attending across chunks. The two are identical on a
+single needle (100$=$100, one chunk suffices) but differ sharply on multi-fact
+tasks: niah\_multikey 88/92 vs.\ 44/40 ($\Delta{+}44/{+}52$), and BABILong
+qa2/qa5 gaps of $+$12 to $+$20. Full cross-chunk attention is thus a genuine
+design requirement for multi-fact disambiguation, degradable to block-diagonal
+only on single-needle tasks to save compute.
+
+\input{sections/tab_crosschunk}
+
+\paragraph{Chunk size.}
+Table~\ref{tab:chunk} sweeps the chunk (block) size. Read length grows linearly
+with chunk while write calls halve as chunk doubles, trading prefill speed and
+multi-key recall against decode latency and memory. Chunk 512 is the sweet spot:
+strong prefill speedup ($7.83\times$ at 128k), low flat memory (17--18\,GB),
+moderate decode (2.4\,s), and near chunk-1024 multikey accuracy (94 vs.\ 96) at
+roughly half the read length and decode cost.
+
+\input{sections/tab_chunk}
+
+\subsection{Real long-document and dialogue QA}
+The synthetic results above isolate mechanisms; we now turn to four real-QA
+benchmarks. \textbf{LongEval} (Table~\ref{tab:longeval}), pure single-hop
+lines-retrieval, is the home turf of retrieval-based memory: with the per-task
+optimum $k{\in}\{4,6\}$, CoMem matches KV-Direct inside the window
+(8k/16k/32k $=$ 1.00/0.96/1.00) and \emph{reverses sharply} past it (64k 0.94
+vs.\ 0.34; 128k 0.98 vs.\ 0.00), at a constant $\approx$2--3k read.
+\textbf{BABILong} (Table~\ref{tab:babilong}) draws the honest boundary:
+KV-Direct's full context wins single-fact localization (qa1), while CoMem wins
+relational reasoning (qa5), particularly at long range; HCache survives only
+short redundant-fact qa5 and crashes otherwise, confirming its failures are
+retrieval-missing, not model-incapacity. On \textbf{LongBench}
+(Table~\ref{tab:longbench}) all methods sit in a narrow 4--12 F1 band---the task
+is intrinsically hard for this base backbone---and CoMem's AVG 9.58 tracks
+full-context 10.13 within noise using a constant read, so the low absolute score
+is task difficulty, not a CoMem weakness. On \textbf{LoCoMo}
+(Table~\ref{tab:locomo}) CoMem (F1 9.05 / acc 24.1) $\approx$ KV-Direct
+(8.72 / 20.3) and both far exceed HCache (4.73 / 6.4); by category CoMem is
+strongest on open-domain/persona questions and weakest on adversarial
+(refusal-requiring) items.
+
+\input{sections/tab_longeval}
+\input{sections/tab_babilong}
+\input{sections/tab_longbench}
+\input{sections/tab_locomo}
+
+\subsection{Generality: Hunyuan Hy3, an 80-layer sparse MoE}
+\label{sec:hy3-general}
+Everything above uses dense $\le$8B backbones. To test whether the depth
+partition is an artifact of small dense models, we port CoMem to the Tencent
+Hunyuan \textbf{Hy3} (\texttt{hy\_v3}): an 80-layer sparse Mixture-of-Experts
+model (192 experts, top-8 routing plus one shared expert; $\approx$597\,GB in
+bf16) with a 262{,}144-token native window. The backbone is sharded across 8
+GPUs with \texttt{device\_map="auto"}; CoMem's write/read semantics are
+unchanged, with only per-layer device hops added (\S\ref{sec:method}). Three
+questions: is the depth partition still \emph{exact} through an MoE stack; where
+is the split $j$; and does the constant read survive to a quarter-million tokens.
+
+\paragraph{The depth partition is exact through MoE routing.} A real-model
+self-test on the 597\,GB checkpoint confirms the partition reproduces the
+model's own forward to machine zero. Reconstructing the full forward by writing
+\texttt{layers[0:$j$]} and resuming \texttt{layers[$j$:80]} on one contiguous
+sequence gives $\max|\Delta\text{logit}|{=}0.0$ at $j\in\{0,1,40,80\}$
+(including the dense$\to$MoE layer-0 boundary); the $j{=}0$ read/write packing
+likewise matches at $0.0$. Because the resumed half re-executes every router and
+expert, this equality proves the MoE routing is replayed exactly. A separate
+probe of absolute-position \emph{invariance} of the routed hidden fails in bf16
+(the discrete top-8-of-192 pick flips under router-logit ties amplified across
+80 layers), but the same probe passes in fp32; CoMem never assumes
+position-invariance (it writes with chunk-local RoPE and reads with fresh
+contiguous RoPE), so this is a bf16 artifact orthogonal to correctness, not a
+mechanism gap.
+
+\paragraph{Split $j$: a fidelity smile at mid-depth.} Sweeping $j$ over PG19
+windows (all chunks selected, isolating the depth effect from retrieval noise),
+the readout LM tax is \emph{non-monotonic} in $j$: worst at shallow $j$, best at
+mid-depth, then rising again toward deep $j$. At 16k the perplexity gap falls
+from $1.64$ ($j{=}16$) to a minimum near $j{\approx}32$--$36$ ($1.50$) before
+climbing. The knee lands at $j{\approx}32/80$ ($0.40L$), matching the dense-8B
+sweet spot ($j{\approx}12/36\approx0.33L$): the mid-depth hidden is the most
+re-composable cache point---deep enough that per-chunk semantics are formed, not
+so deep that chunk-local encoding has committed to a query-blind continuation.
+The shape is robust to chunk size (a chunk-256 sweep reproduces it), with larger
+chunks giving a lower absolute tax; we operate at chunk 512, $j{=}32$.
+
+\paragraph{Self-distillation drives the tax toward 1.0.} Zero-shot, the
+depth-partition tax is higher on Hy3 (1.4--1.5$\times$ at 16k) than on the 8B
+backbones, because this is zero-shot and all-chunks-selected. Distilling a
+$j{=}32$ student (LoRA $r{=}32,\alpha{=}64$ on \texttt{layers[32:]}) against the
+$j{=}0$ teacher on 4000 steps of plain PG19 KL---no synthetic long-context
+data---closes most of the gap (Table~\ref{tab:hy3distill}): the 16k LM tax drops
+from $+49.6\%$ to $+7.8\%$ and top1 agreement rises $0.773\to0.871$. This
+reproduces the 8B self-distillation story on an $80$-layer MoE.
+
+\input{sections/tab_hy3_distill}
+
+\paragraph{Constant read to 256k, no OOM.} With the distilled adapter and BM25
+top-8, CoMem's read length holds at $\approx$4.3--4.6k tokens while the RULER
+context grows from 16k to 256k---a $16\times$ increase in context at
+$\approx$flat read (Table~\ref{tab:hy3ruler}). Recall stays high across the
+board (niah\_single $98/92/100/98/100$; niah\_multikey $100/94/100/100/98$ over
+16k/32k/64k/128k/256k), \emph{peaking at 256k}, the backbone's native ceiling,
+with zero out-of-memory failures. Because Hy3's native window is 262k (unlike
+the 8B backbones, whose extrapolation limit we cross at 128k, cf.\
+Table~\ref{tab:scaling}), this run isolates the \emph{efficiency} claim rather
+than the extrapolation one: the depth partition, retrieval, and
+context-independent read together let a 597\,GB MoE ingest a quarter-million
+tokens through a fixed $\approx$4.5k-token pack. The three mechanisms hold at
+MoE scale.
+
+\input{sections/tab_hy3_ruler}

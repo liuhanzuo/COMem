@@ -1,0 +1,75 @@
+\section{Related Work}
+\label{sec:related}
+
+\paragraph{Fixed-budget KV-cache compression.} A large body of work bounds the
+key--value cache to a fixed budget by discarding or merging entries along the
+\emph{token} axis. StreamingLLM~\citep{streamingllm} keeps only a recent window
+plus a few initial attention-sink tokens; H2O~\citep{h2o} evicts all but the
+recent and heavy-hitter tokens ranked by accumulated attention mass;
+SnapKV~\citep{snapkv} predicts, from a short observation window, which positions
+each head will attend to and prunes the rest before generation. Others vary the
+budget \emph{across} layers---PyramidKV~\citep{pyramidkv} allocates more cache to
+lower layers following an information-funnel observation, and
+LCKV~\citep{lckv} condenses the cache to a few layers whose KV the remaining
+layers share---while Activation Beacon~\citep{actbeacon} learns, through
+continued training, to compress per-layer activations into a small set of beacon
+tokens. CompressKV~\citep{compresskv} adds a semantic retrieval-head criterion to
+token eviction and is orthogonal to us, as it still operates on the token axis.
+The common denominator is that all of these methods retain (a compressed form of)
+the \emph{full-depth} KV of the kept tokens; CoMem instead caches a single
+mid-depth hidden state and reconstructs the upper layers on demand. We compare
+head-to-head against StreamingLLM under an identical read budget in
+\S\ref{sec:experiments}.
+
+\paragraph{Retrieval-augmented long context.} A second line augments a bounded
+working set with a retrieval step that surfaces the relevant distant context.
+Landmark Attention~\citep{landmark} trains a landmark token per block and lets
+attention select blocks through it, while FoT/LongLLaMA~\citep{longllama} attach
+an external $(k,v)$ memory and use contrastive training to keep retrieved keys
+distinguishable. On the serving side, CacheBlend~\citep{cacheblend} and
+RAGCache~\citep{ragcache} precompute and reuse the KV of retrieved chunks,
+selectively recomputing a few tokens to restore cross-attention quality, and
+InfLLM~\citep{infllm} stores distant context as memory units and looks up
+token-relevant units inside attention, training-free. In every case the
+retrieved unit is the \emph{full-layer} KV of a block, and retrieval is either
+folded into attention (differentiable, per-step) or organized as a KV store to
+be attended. CoMem departs on both counts: it retrieves with an external,
+non-differentiable, one-shot BM25 pass over chunk text, and it \emph{recomputes}
+the upper layers from a cached mid-layer hidden rather than attending to cached
+KV.
+
+\paragraph{Fixed-size / architectural long-context memory.} A third line encodes
+long-range information into a memory whose size does not grow with context.
+MemoryLLM~\citep{memoryllm} maintains a fixed-size latent memory pool inside the
+transformer that is self-updated from new text and survives many updates; we
+also compare against it as a same-class rival in \S\ref{sec:experiments}.
+RecursiveSummarizing~\citep{recsum} keeps a text-space memory by recursively
+rewriting a natural-language summary, and YOCO~\citep{yoco} redesigns the model
+as a decoder--decoder that caches a single global KV once and shares it across
+upper cross-decoder layers, reaching near-perfect million-token retrieval (we
+cite its numbers as an anchor rather than reproducing it). What unifies these
+methods is that the memory is either baked into the parameters or requires
+retraining the architecture from scratch. CoMem keeps the backbone stock, adds
+only a light self-distilled LoRA, and stores an external, non-evolving hidden
+cache that is read by recomputation.
+
+\paragraph{Caching intermediate activations and recomputing upper layers (closest).}
+Nearest to us are methods that cache a partial forward state and reconstruct the
+rest. HCache~\citep{hcache} restores an evicted KV cache in a serving system by
+storing a mid-layer activation and recomputing the layers above it, but it is
+post-hoc, untrained, and does no retrieval. KV-Direct~\citep{kvdirect}
+(``The Residual Stream Is All You Need'') shows the KV cache is a deterministic
+projection of the residual stream and recomputes the \emph{full-depth} KV from a
+cached residual, training-free and numerically exact, but it keeps every token so
+its working set still grows with context. KV-CAT~\citep{kvcat} induces cache
+compressibility through continued pretraining on the token/slot axis---we cite it
+as prior art and explicitly do \emph{not} claim its train-for-compressibility
+mechanism as ours, since CoMem partitions on the \emph{depth} axis and works
+zero-training. StagesOfInference~\citep{stagesofinference} provides the
+depth-semantics rationale---distinct functional stages emerge along the layer
+stack---that motivates treating depth as the partition axis. CoMem occupies a
+unique intersection of these ideas: layer-\emph{partial} recompute (only
+layers $[j{:}L]$) driven by external BM25 retrieval, a read length that is
+constant in context length, a self-distillation step that pushes the cacheable
+split depth deeper, and the split $j$ exposed as a single RAG$\leftrightarrow$closed-book
+knob.

@@ -1,0 +1,13 @@
+# Core (CoMem package + eval/train/bench)
+torch>=2.1
+transformers>=5.5
+numpy
+pandas
+tqdm
+
+# Distillation (train/distill.py)
+peft>=0.10
+
+# BABILong eval (eval/babilong.py) — the benchmark's own package + HF datasets
+datasets>=2.14
+# babilong   # pip install babilong  (or add the babilong repo to PYTHONPATH)

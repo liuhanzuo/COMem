@@ -1,0 +1,32 @@
+% LoCoMo (long-dialogue memory), F1/acc. From draft §2.9 (verified).
+% CoMem/HCache n=1986 (full); KV-Direct n=760 (converged).
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{@{}lcc@{}}
+\toprule
+\multicolumn{3}{@{}l}{\textit{(a) overall}} \\
+\textbf{Method} & \textbf{F1} & \textbf{acc} \\
+\midrule
+\textbf{CoMem}          & \textbf{9.05} & \textbf{24.1} \\
+KV-Direct (full ctx.)   & 8.72 & 20.3 \\
+HCache (no retrieval)   & 4.73 & \phantom{0}6.4 \\
+\midrule
+\multicolumn{3}{@{}l}{\textit{(b) CoMem by category ($n{=}1986$)}} \\
+\textbf{Category} & \textbf{F1} & \textbf{acc} \\
+\midrule
+cat1 multi-hop ($n{=}282$)        & \phantom{0}9.8 & 12.1 \\
+cat2 single-hop ($n{=}321$)       & \phantom{0}6.3 & \phantom{0}9.3 \\
+cat3 temporal ($n{=}96$)          & \phantom{0}8.1 & 24.0 \\
+cat4 open-domain ($n{=}841$)      & \textbf{13.9} & \textbf{45.7} \\
+cat5 adversarial ($n{=}446$)      & \phantom{0}1.6 & \phantom{0}1.6 \\
+\bottomrule
+\end{tabular}
+\caption{LoCoMo long-dialogue memory (F1/acc). CoMem ($n{=}1986$) $\approx$
+KV-Direct ($n{=}760$, converged) on F1 and higher on accuracy, both far above
+HCache. By category, CoMem is strongest on open-domain/persona questions (cat4
+acc 45.7) and weakest on adversarial (cat5), which requires refusal---a backbone
+behavior, not a retrieval failure. Absolute scores are low because dialogue-QA
+answers are short and paraphrastic.}
+\label{tab:locomo}
+\end{table}

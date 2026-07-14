@@ -1,0 +1,25 @@
+% Hy3 self-distillation: zero-shot vs distilled ppl_gap / top1 at split j=32.
+% Matched 16-doc PG19 sets. Verified: logs/hy3_jsweep_results_run1.json (zero-shot)
+% and logs/hy3_jsweep_distilled_results.json (distilled), num_docs=16.
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+ & \multicolumn{2}{c}{ctx 8k} & \multicolumn{2}{c}{ctx 16k} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}
+\textbf{$j{=}32$} & gap & top1 & gap & top1 \\
+\midrule
+zero-shot  & 1.378 & 0.823 & 1.496 & 0.773 \\
+distilled  & \textbf{1.071} & \textbf{0.895} & \textbf{1.078} & \textbf{0.871} \\
+\bottomrule
+\end{tabular}
+\caption{CoMem self-distillation on Hy3 at split $j{=}32$ (LoRA $r{=}32,
+\alpha{=}64$ on \texttt{layers[32:]}, teacher $j{=}0$ RAG recompute, 4000 steps of
+plain PG19 KL, no synthetic data). \textbf{gap} is the multiplicative LM tax
+(CoMem-readout perplexity / full-context perplexity; $1.0$ is exact); \textbf{top1}
+is argmax agreement with the full forward, over matched 16-doc PG19 windows. The
+16k LM tax falls from $+49.6\%$ to $+7.8\%$ and top1 rises $0.773\to0.871$,
+reproducing the 8B-backbone self-distillation effect on the 80-layer MoE.}
+\label{tab:hy3distill}
+\end{table}

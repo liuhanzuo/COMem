@@ -1,0 +1,25 @@
+% chunk_size ablation. From draft §2.5 (verified). read_len = k*chunk + sink + query (k=12).
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+\textbf{chunk} & \textbf{read len} & \textbf{peak (64k)} & \textbf{prefill} & \textbf{decode} & \textbf{multikey} \\
+\midrule
+128  & 1{,}665  & 16.3\,GB & 1.38$\times$ & 0.69\,s & 90/80 \\
+256  & 3{,}329  & 16.8\,GB & 2.61$\times$ & 1.17\,s & 92/80/80/88 \\
+\textbf{512}  & 6{,}657  & 17.8\,GB & \textbf{7.83}$\times$ & 2.39\,s & \textbf{94} \\
+1024 & 13{,}313 & 19.8\,GB & 4.99$\times$ & 5.55\,s & 96 \\
+\bottomrule
+\end{tabular}
+\caption{Chunk-size (block-size) ablation. Read length grows linearly with
+chunk ($k{=}12$ fixed), and write calls halve as chunk doubles (513/257/129/65
+at 64k), so larger chunks give faster prefill and higher multikey recall but a
+proportionally slower decode (which re-attends the whole pack). Prefill speedup
+is at 64k except chunk-512, shown at 128k (its 64k value is $4.36\times$; see
+Table~\ref{tab:eff}). multikey lists best-top-$k$ recall at the reported lengths
+(128/1024 rows at 16k/32k and 128k respectively; 256 at 8k/16k/32k/64k).
+Chunk 512 is the sweet spot: strong prefill speedup, low flat memory, moderate
+decode, and near chunk-1024 accuracy at $\approx$half the read length.}
+\label{tab:chunk}
+\end{table}

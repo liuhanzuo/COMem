@@ -1,0 +1,27 @@
+\section{Conclusion: Long-Context Memory Is a Layer-Partition
+Problem, Not a Token-Budget Problem}
+\label{sec:conclusion}
+We recast long-context memory as a question of \emph{where in the stack} to
+cache rather than \emph{how many tokens} to keep. Two facts about the
+transformer make this work. First, understanding saturates mid-stack: the
+depth-$j$ residual-stream hidden already encodes what a chunk means, so a
+single such hidden per chunk---about $1/(2L)$ of the full KV---is a sufficient
+statistic worth caching (\S\ref{sec:motivation}). Second, generation lives in
+the top layers and is query-conditioned, so those layers cannot be cached
+query-blind but must be recomputed at read time with the query present
+(\S\ref{sec:motivation}). Retrieval closes the loop: a one-shot BM25 selector
+supplies the right chunks, and an iterative, forward-free variant follows
+reference chains, lifting variable-tracking from 20--28 to 92--97
+(\S\ref{sec:experiments}). The result is the only method that survives past the
+backbone's extrapolation window at constant cost---at 128k, full-context and
+full-KV baselines collapse to $0$/OOM while CoMem holds RULER~$100$ and
+LongEval~$0.98$ with a $7.83\times$ prefill speedup and a flat
+$\approx$6.7k-token / $\approx$18\,GB footprint---and the depth partition is
+exact ($\max|\Delta\text{logit}|<10^{-4}$ on the dense 8B backbone and
+$=0.0$ on a 597\,GB Hunyuan 80-layer MoE through its routing), holding across
+three model families (Qwen3-8B, Llama-3, Hunyuan~Hy3). The split depth $j$ is
+thus a single dial from full RAG ($j{=}0$) to closed-book ($j{=}L$), with a
+cacheable sweet spot at $\approx$0.33--0.40$\cdot L$. The remaining cost is
+decode, which recomputes layers $[j{:}L]$ at every step; we see a resumed-band
+KV cache over exactly those recomputed layers as the natural path to closing
+it.

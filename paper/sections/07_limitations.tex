@@ -1,0 +1,72 @@
+\section{Limitations}
+\label{sec:limitations}
+
+CoMem is an efficiency and \emph{ultra-long-context} method, not an
+accuracy state-of-the-art. Inside the backbone's extrapolation window
+($\le$64k, where the full context still fits under the native positional
+range), full-context recompute---our KV-Direct reference---matches or
+exceeds CoMem: when the document fits, feeding all of it at full depth is
+simply the better option. The clearest in-window gaps are on tasks that
+reward exact localization over an intact context. On BABILong
+(Table~\ref{tab:babilong}) single- and double-fact localization favors
+KV-Direct: qa1 at 4k--32k is 75/80/72/62 for KV-Direct versus 66/63/57/28
+for CoMem, and qa2 (the hardest double-fact setting) stays low for CoMem
+across lengths. These are honest in-window losses; CoMem's advantage only
+appears once the packed context exceeds the native window (\S\ref{sec:experiments}).
+
+The watershed at which CoMem overtakes full context is backbone-dependent,
+tracking roughly twice the native positional window. On Llama-3
+\citep{llama3} (native 8k) full-context already collapses at 16k
+($=$0) while CoMem holds; on Qwen3-8B \citep{qwen3} (native 40{,}960)
+full-context survives to 64k and only collapses at 128k. A backbone with
+strong length extrapolation therefore pushes the crossover out and narrows
+the regime in which CoMem is the only viable choice; weaker-extrapolating
+backbones benefit earlier and more.
+
+Multi-hop reasoning over reference chains was a genuine weakness of
+single-pass retrieval: on RULER variable-tracking a one-shot BM25 selector
+scores only 27.6 at 16k and degrades further at 32k, because a single
+retrieval pass cannot recover an entire chain of variable bindings. This
+limitation is now \emph{largely retired} by the forward-free
+\texttt{iter\_bm25} selector, which follows the reference chain and lifts
+variable-tracking to 95.2/93.8/96.8 at 8k/16k/32k (Table~\ref{tab:itervt}),
+non-degrading with length. Two caveats remain. First, iteration helps only
+on chained multi-hop tasks and is scoped away from independent-needle tasks,
+where it slightly hurts (multikey 92 vs.\ 97--99 single-pass) or is a no-op
+(single needle 100$=$100). Second, the \emph{decode-time cost} of iterative
+retrieval---each hop issues an additional retrieval and read---is not yet
+characterized; the reported gains are accuracy-only.
+
+Decode is slow. Because every generated token recomputes layers[$j{:}L$]
+with full attention over the entire read pack, per-step decode latency is
+$\sim$2.4\,s at chunk size 512 and rises to $\sim$5.5\,s at chunk size 1024,
+against $\sim$0.3--0.5\,s for full attention (Table~\ref{tab:eff}). CoMem's
+wins are in prefill and memory (constant $\sim$18\,GB, 7.83$\times$ prefill
+speedup at 128k), not in per-token decode. Caching the resumed upper-band KV
+across decode steps would remove most of this cost and is left to future work.
+
+We are careful about what ``compressibility'' means here. CoMem's storage
+saving is on the \emph{layer/feature axis}: we cache a single depth-$j$
+hidden per chunk---roughly $1/(2L)$ of the full-depth KV---rather than
+retaining all layers. We do \emph{not} claim that shallower hidden states
+are inherently more compressible along the value axis (e.g.\ under int4
+quantization); that stronger hypothesis was in fact falsified, as
+int4-quantizing the shallow $j{=}6$ hidden yields a relative error of 0.84.
+The gain comes from storing one layer, not from shallow states quantizing
+better.
+
+CoMem inherits the backbone's behavior on adversarial refusal. On LoCoMo
+(Table~\ref{tab:locomo}), the adversarial category cat5---which requires the
+model to refuse unanswerable questions---is weak (F1/acc $\approx$1.6),
+mirroring the stock backbone's reluctance to abstain rather than any
+retrieval failure. Handling such queries would require an explicit refusal
+mechanism, which CoMem does not add.
+
+Finally, some evaluation settings are calibrated for cost rather than uniform
+sample counts, and we flag them for honesty. The RULER head-to-head
+(Table~\ref{tab:h2h}) is an $n{=}50$ cut, whereas most other results use
+$n{=}100$; the topk$\times$length grid is sparse (only 32k carries a complete
+topk curve); and we report three distinct 128k niah\_multikey values---98
+(best-topk, tk8), 96 (fixed tk12, head-to-head), and 84 (length-adaptive
+tk24, scaling)---which differ by topk convention, not by contradiction, each
+annotated with its topk setting in the relevant table.

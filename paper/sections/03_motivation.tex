@@ -1,0 +1,141 @@
+\section{The Depth Division of Labor}
+\label{sec:motivation}
+This section presents the paper's central finding---an \emph{understand-then-generate}
+division of labor along a transformer's depth---and derives CoMem's design from
+it. We organize it as seven numbered insights. The first three (I1--I3) are
+\emph{direct, method-independent measurements} of where understanding lives:
+layer-wise probes, causal layer-truncation, and split-depth recomputation
+sweeps. They stand on their own as a claim about transformer computation---the
+lower layers finish understanding early and the top layers only generate---and
+motivate a new kind of memory that stores that \emph{comprehension} state rather
+than tokens or KV. Insight I4 records the cost of caching deeper, and I5--I7
+establish how the cached state must be read back (retrieval, made iterative for
+chains, with full cross-chunk attention). Numbers marked \emph{oracle} or
+single-pass recur as controlled ablations in \S\ref{sec:experiments}.
+
+\paragraph{(I1) Semantic content saturates at mid-depth, so a single mid-layer
+hidden is a sufficient statistic for ``understanding'' and is what should be
+cached.} Linear probes on semantic tasks peak in the middle of the stack and
+fall off at the top, whereas next-token ability forms only in the top layers;
+the two curves separate cleanly and consistently across Qwen3-8B and Llama-3.
+Causally, truncating the network to only its first $\sim$4--8 layers (normalized
+depth $0.12$--$0.22$) already recovers $95\%$ of the full model's downstream
+semantics, and an RTE mid-layer probe beats the top-layer probe by
+$+0.06$ to $+0.10$. This mid-depth ceiling is exactly where the cache stops
+helping: a zero-training split-depth sweep on RULER \citep{ruler}
+niah\_single at 16k holds recall at $100$ for every $j\le 9$. The same shape
+survives at radically larger scale: on the 80-layer Hunyuan Hy3 MoE the split
+sweep shows a flat plateau over $j\in[8,32]$ (top-1 agreement $\approx0.90$,
+$\mathrm{KL}\approx0.21$), placing the cacheable ceiling near $0.4L$. Because a
+mid-depth residual hidden encodes the chunk's semantics but not yet its
+continuation \citep{stagesofinference}, we \textbf{split the transformer at
+depth $j$ and \textsc{Write} the depth-$j$ residual hidden}
+$h_j\in\mathbb{R}^{512\times d}$ ($\sim$$1/(2L)$ of a full KV cache),
+recomputing only layers $[j{:}L]$ at read time.
+
+\paragraph{(I2) The upper layers perform query-conditioned generation, so their
+outputs cannot be cached query-blind---the cache point must sit \emph{below} the
+split.} The upper band is where the query gets injected, and a hidden computed
+without the query diverges sharply from its query-aware counterpart. Measuring
+this ``top-prepay'' divergence---computing the top $b$ layers query-blind
+instead of recomputing them with the query present---the gap grows monotonically
+with $b$: $b{=}6\to$ cosine $0.916$ / relative-$L_2$ $4.2$;
+$b{=}8\to 0.902 / 5.8$; $b{=}12\to 0.865 / 11.3$. A direction-B negative
+control that caches a \emph{top}-layer hidden confirms the cost end-to-end:
+BABILong \citep{babilong} qa5 falls from $(12,0){=}61/50$ (caching below the
+split) to $(12,6){=}29/20$ and $(6,12){=}9/10$ as the cache creeps into the
+generation band. The trade is visible even within a single layer: the top
+layer's native RTE verbalizer scores $0.79$ while its linear probe scores only
+$0.62$---the top trades linear separability for generation utility. The same
+signature reappears on Hy3 as a ``fidelity smile'': resuming from too \emph{deep}
+a split ($j\gtrsim 36$) makes the LM tax rise again, because a deep chunk-local
+encoding has already committed to a query-blind continuation. We therefore make
+\textsc{Read} pack \texttt{[sink; selected $h_j$; query $h_j$]} and
+\textbf{recompute the query-conditioned upper layers with the query present},
+keeping the cache point strictly below the generation band.
+
+\paragraph{(I3) The cacheable depth is a bounded knee: $j$ is a
+RAG$\leftrightarrow$closed-book knob whose sweet spot lands at
+$\sim$$0.33$--$0.40\,L$.} The two endpoints are fixed by construction: $j{=}0$
+is full-RAG recompute, which equals the full forward to
+$\max|\Delta\text{logit}|<10^{-4}$, and $j{=}L$ is closed-book. Between them the
+usable region is a narrow knee. The zero-training niah\_single 16k sweep is flat
+at $100$ through $j\le 9$, then falls off a cliff to $14$ at $j{=}12$ and to $0$
+at $j{=}18$; a self-distilled LoRA (\S\ref{sec:method}) pushes the usable
+ceiling from $j\approx9$ to $j\ge12$. Under perfect retrieval the decline is
+smooth and confirms the same band: BABILong qa5 oracle recall at
+$j{=}0/6/12/18$ is $69/50/39/16$. Across backbones the knee is stable in
+\emph{relative} depth---the dense-8B operating point sits near $0.33L$
+($j{=}12$ of $L{=}36$) and the
+Hy3 knee at $j\approx32/80\,({=}0.40L)$---even though the absolute
+semantic depth is backbone-dependent. We therefore \textbf{operate at
+$j\approx0.33$--$0.40\,L$ (e.g.\ $j{=}12$ on Qwen3-8B), expose $j$ as an
+explicit knob, and self-distill to push the usable split deeper.}
+
+\paragraph{(I4) Caching deeper costs monotonically more LM quality, so $j$ is a
+\emph{trade-off}, not a tax-minimum---and the cache point can be made more
+compressible by design (severable).} Forcing a low-rank funnel at successive
+depths of a from-scratch 1B model (dim $512$) shows the readout LM tax rises
+monotonically with depth: bottleneck at layer $1/3/6/9/12$ costs
+$+4.2/5.8/6.0/9.5/9.6\%$ perplexity; narrowing the funnel at layer $6$
+($d{=}1024/512/256$) costs $+4.5/5.9/8.5\%$; and every arm is cheaper on the
+larger 3B model than on 1B. So the shallow end minimizes LM tax while the deep
+end maximizes cacheable semantics (I1, I3), and we therefore
+\textbf{set $j$ at this compromise (e.g.\ $j{=}12$ on Qwen3-8B), not at a
+free-lunch tax minimum}. We frame this with a prediction-not-reconstruction
+information-bottleneck view: the cache need only preserve the predictive
+information $I(X;Y_{\text{pred}})$, not the reconstruction information
+$I(X;X)$, which is why a single mid-layer hidden suffices and why a
+token-reconstruction auxiliary was the wrong objective. This
+compressibility-by-design story is a \emph{severable} companion direction
+developed in follow-up work: CoMem itself requires
+\emph{no} special pretraining and runs on a stock backbone, so we carry only the
+tax numbers here as evidence that $j$ is a trade-off.
+
+\paragraph{(I5) At long range, facts drown without retrieval, so the read must
+retrieve and recompute; the long-range bottleneck is retrieval quality, not
+compression fidelity.} Stripping retrieval isolates the point. HCache-style
+mid-layer recompute \emph{without} retrieval \citep{hcache} collapses on long
+needle tasks---niah\_single $8\text{k}{=}34\to16\text{k}{=}2$, LongEval all-$0$,
+BABILong qa1 near-zero ($16/3/0/0$ at 4k/8k/16k/32k)---yet short,
+redundant-fact tasks survive without retrieval (qa5 $2\text{k}{=}68$,
+$8\text{k}{=}52$). The failure is therefore \emph{retrieval-missing}, not model
+incapacity: the needle is present in the cache but drowned. Keeping the
+\emph{recent} tokens instead of the \emph{relevant} ones fails the same way:
+StreamingLLM \citep{streamingllm} at the same fixed $\sim$6.7k-token budget
+scores niah\_single $90/42/16/4$ at $8/16/64/128$k versus CoMem's
+$100/100/100/100$ ($25\times$ at 128k; Table~\ref{tab:slm}). Conversely, given
+the right chunk, the compressed read-out is lossless---an oracle selector scores
+$100\%$ on NIAH at every length---so what remains to be solved is selection, not
+fidelity. We therefore \textbf{feed the read pack from a BM25 top-$k$ selector}
+and recompute with full cross-chunk attention (I7).
+
+\paragraph{(I6) Multi-hop reference chains need \emph{iterative} retrieval---a
+single pass drowns the chain.} A one-shot selector cannot recover an $N$-hop
+assignment chain, because the chunk holding the final value is useless without
+the chunks that link to it. On RULER variable-tracking a single pass at 16k
+scores only bm25 $27.6$ / reader\_attn $60.2$ / oracle $9.2$ (the oracle is
+ill-defined here---locating the answer chunk misses the chain), and all selectors
+collapse to $23$ or below at 32k. Making retrieval iterative---\texttt{iter\_bm25}
+follows the variable chain (retrieve, read the referenced name, re-retrieve)
+with no forward pass and no training---lifts variable-tracking to
+$8\text{k}{=}95.2$, $16\text{k}{=}93.8$, $32\text{k}{=}96.8$ (hop-4, $k{=}16$)
+and, crucially, stops it degrading with length (Table~\ref{tab:itervt}). The
+gain is scoped to reference chains: on independent multi-key needles iterative
+retrieval slightly hurts ($92$ vs.\ single-pass $97$--$99$) and on single needles
+it is a no-op ($100{=}100$). We therefore add \textbf{\texttt{iter\_bm25} as a
+selector variant} (\S\ref{sec:method}), applied to variable-tracking and
+multi-hop queries but not to independent-needle tasks.
+
+\paragraph{(I7) Cross-chunk full-attention recompute over the pack is
+load-bearing for multi-fact disambiguation.} Because the read recomputes the
+upper layers, it can either attend across all retrieved chunks or reuse each
+chunk's KV block-diagonally; the difference decides multi-fact tasks. With full
+cross-chunk attention, RULER niah\_multikey scores $88/92$ at 16k/32k versus
+$44/40$ block-diagonal ($\Delta{+}44/{+}52$); on BABILong the pattern repeats
+(qa2 $36/24$ vs.\ $16/12$; qa5 $68/65$ vs.\ $49/53$), while single-needle tasks
+are unaffected ($100{=}100$, since one chunk already answers). Disambiguating
+which of several candidate facts satisfies the query requires the query to
+attend jointly over all of them. We therefore \textbf{recompute layers $[j{:}L]$
+with full attention over the entire read pack}, not block-diagonal KV-reuse; the
+quantitative ablation is Table~\ref{tab:crosschunk}.

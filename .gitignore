@@ -1,0 +1,45 @@
+# weights / checkpoints / large binaries
+*.pt
+*.bin
+*.safetensors
+*.ckpt
+
+# data / results / outputs
+data/
+outputs/
+ruler_results/
+babilong_results/
+longbench_results/
+longeval_results/
+locomo_results/
+
+# secrets / credentials
+configs/password*
+*.pem
+*.key
+.env
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# LaTeX build artifacts
+*.pdf
+*.aux
+*.log
+*.out
+*.bbl
+*.blg
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.zip
+paper/_deprecated/
+missfont.log
+
+# misc
+.DS_Store

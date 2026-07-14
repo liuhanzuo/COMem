@@ -1,0 +1,24 @@
+% Cross-chunk attention ablation. From draft §3.5 (verified).
+% RULER n=50 fixed tk12; BABILong n=100. Paired entries = two evaluated context lengths.
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Task} & \textbf{Full attn.} & \textbf{Block-diag.} & \boldmath$\Delta$ \\
+\midrule
+RULER niah\_single   & 100 / 100 & 100 / 100 & \phantom{$+$}0 / \phantom{$+$}0 \\
+RULER niah\_multikey & \textbf{88 / 92} & 44 / 40 & $+$44 / $+$52 \\
+BABILong qa2         & 36 / 24 & 16 / 12 & $+$20 / $+$12 \\
+BABILong qa5         & 68 / 65 & 49 / 53 & $+$19 / $+$12 \\
+\bottomrule
+\end{tabular}
+\caption{Cross-chunk attention ablation: recomputing \texttt{layers[$j$:]} with
+\emph{full} cross-pack attention vs.\ a \emph{block-diagonal} mask that reuses
+each chunk's KV without attending across chunks. Paired entries report two
+evaluated context lengths (RULER $n{=}50$, fixed $k{=}12$; BABILong $n{=}100$).
+Cross-chunk recompute is load-bearing for multi-fact disambiguation
+(multikey $\Delta{+}44/{+}52$, qa2/qa5 large gaps) but irrelevant for a single
+needle (100$=$100), where the cheaper block-diagonal read can be used.}
+\label{tab:crosschunk}
+\end{table}

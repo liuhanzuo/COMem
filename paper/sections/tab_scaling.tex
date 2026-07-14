@@ -1,0 +1,19 @@
+% RULER scaling to 256k, n=50. From draft §2.2 (verified; CoMem multikey = length-adaptive topk).
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{@{}llcccccc@{}}
+\toprule
+\textbf{Task} & & 8k & 16k & 32k & 64k & 128k & 256k \\
+\midrule
+\multirow{2}{*}{niah\_single} & CoMem & 100 & 100 & 100 & 100 & \textbf{100} & \textbf{98} \\
+ & full-ctx & 100 & 100 & 100 & 100 & \textbf{0} & OOM \\
+\multirow{2}{*}{niah\_multikey} & CoMem & 94 & 94 & 94 & 82 & 84 & 60 \\
+ & full-ctx & 100 & 100 & 100 & 96 & \textbf{0} & OOM \\
+\multirow{2}{*}{var-track} & CoMem & 49 & 25 & 22 & 21 & 20 & --- \\
+ & full-ctx & 100 & 100 & 100 & 98 & \textbf{0} & OOM \\
+\bottomrule
+\end{tabular}
+\caption{RULER scaling, Qwen3-8B, $n{=}50$. The watershed is the backbone's extrapolation limit; beyond it (128k, 256k) only CoMem is usable. Multi-hop var-track is a CoMem weakness (Limitations).}
+\label{tab:scaling}
+\end{table}

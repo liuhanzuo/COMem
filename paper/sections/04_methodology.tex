@@ -1,0 +1,138 @@
+\section{Methodology}
+\label{sec:method}
+The motivation (\S\ref{sec:motivation}) established two facts: understanding
+saturates at a mid-stack depth and is therefore cacheable in a single hidden
+state, while the top layers perform the query-conditioned generation and must
+be recomputed with the query present. CoMem turns these facts into a system by
+partitioning the transformer along the \emph{depth} axis rather than the
+\emph{token} axis: it caches one mid-layer hidden per chunk at write time, and
+at read time retrieves a fixed number of these hiddens and recomputes only the
+upper layers. Read compute and memory are then constant in context length. We
+first fix notation, then describe the Write and Read passes, the retrieval
+(selector) module, the split-depth knob $j$, and the optional self-distillation
+that deepens the cacheable point.
+
+\paragraph{Formal notation.} Let a decoder-only backbone have $L$ transformer
+layers, hidden width $d$, and layers indexed $[0{:}L]$. CoMem fixes a single
+\emph{split depth} $j\in\{0,\dots,L\}$ and a \emph{chunk size} $c{=}512$. For a
+chunk of $c$ tokens, $h_j\in\mathbb{R}^{c\times d}$ denotes its depth-$j$
+residual-stream hidden state---the sole quantity cached per chunk. Because a
+full KV cache stores a key and a value tensor at \emph{every} one of the $L$
+layers, whereas CoMem stores one hidden at a \emph{single} depth, its per-token
+storage is $\approx 1/(2L)$ of a full-depth KV cache (on Qwen3-8B, $L{=}36$, so
+$\approx 1/72$). At read time we assemble a \emph{pack}
+$\texttt{[sink}\,;\,\texttt{selected }h_j\,;\,\texttt{query }h_j\texttt{]}$
+built from the top-$k$ retrieved chunk hiddens; its length is
+$\text{sink}+k\!\cdot\!c+\text{query}\approx 6.7\text{k}$ tokens for $k{=}12$,
+$c{=}512$, and---crucially---is \emph{independent of the context length}.
+
+\paragraph{Write.} The document is streamed and split into disjoint
+$c$-token chunks. Each chunk is encoded through the bottom layers $[0{:}j]$
+under \emph{chunk-local} RoPE positions (each chunk starts at position $0$), and
+its depth-$j$ residual-stream hidden $h_j$ is written to an external store keyed
+by the chunk's raw text. Only the bottom $j$ layers run and only one hidden per
+token is retained, so the write pass is shallow ($O(L_{\text{ctx}})$ in the
+number of tokens but a factor $L/j$ cheaper than a full forward) and the store
+grows at $\approx 1/(2L)$ the rate of a KV cache. Chunk-local positions make
+every $h_j$ position-canonical, so cached hiddens are reusable at read time
+regardless of where the chunk originally sat in the document.
+
+\paragraph{Read.} Given a query, the selector (below) returns the indices of the
+top-$k$ chunks. We gather their stored hiddens, prepend a small attention
+\emph{sink} and append the query's own $h_j$ (obtained by running the query text
+through $[0{:}j]$), and assign the whole pack \emph{fresh}, contiguous RoPE
+positions. We then recompute layers $[j{:}L]$ over this pack with
+\emph{full cross-pack attention}---every token attends to every other token in
+the pack---to obtain next-token logits. Full attention is deliberate and
+load-bearing: reusing each chunk's cached upper-layer attention block-diagonally
+(as in KV-reuse pipelines such as CacheBlend/RAGCache \citep{cacheblend,ragcache})
+would prevent the query and the retrieved facts from interacting and collapses
+multi-fact disambiguation; we motivate this in \S\ref{sec:motivation} and ablate
+it in \S\ref{sec:experiments} (Table~\ref{tab:crosschunk}). Because the pack
+length is fixed by $k$ and $c$, both the read FLOPs and the read-time KV memory
+are constant in context length.
+
+\subsection{Chunk selection}
+\label{subsec:selector}
+Retrieval is external, non-differentiable, and---by default---requires no model
+forward pass. This keeps the memory a plain, non-evolving store of hiddens and
+makes the selector a swappable component.
+
+\paragraph{Default: one-shot BM25.} The default selector scores all context
+chunks against the query with BM25 lexical matching over the shared chunk
+tokenization and returns the top-$k$. It is a single pass, purely CPU-side, and
+adds negligible latency. For entity-needle workloads BM25 is near-optimal:
+given the same read pack, it reaches within a few points of an oracle that
+always includes the gold chunk (\S\ref{sec:experiments},
+Table~\ref{tab:selector}), so the practical long-range accuracy of CoMem on
+these tasks is bounded by retrieval recall, not by any information lost in the
+cached hidden.
+
+\paragraph{Iterative BM25 for reference chains.} Single-shot lexical retrieval
+fails on multi-hop reference chains (e.g.\ variable tracking, where
+$\texttt{VAR3}\!\to\!\texttt{VAR1}\!\to\!\texttt{VAR2}{=}42$): the query
+matches the last link but not the chunks that define the intermediate
+variables. We introduce \texttt{iter\_bm25}, a forward-free chain-following
+variant. Round~1 is identical to one-shot BM25. Each subsequent round
+re-queries BM25 using the concatenated token text of the previous round's
+selected chunks, so a freshly retrieved chunk's high-IDF variable name pulls in
+the chunk that \emph{defines} that variable---one hop backward per round. We
+retrieve \texttt{iter\_hop\_topk} chunks per round for
+$\lceil k/\texttt{iter\_hop\_topk}\rceil$ rounds, skipping candidates with zero
+lexical overlap as a chain-end guard. \texttt{iter\_bm25} adds \emph{no}
+training and \emph{no} extra model forward---only additional CPU-side BM25
+lookups over the same corpus---yet it recovers variable tracking from the
+$20$--$28$ range to $92$--$97$ and, unlike single-pass selectors, does not
+degrade with context length (\S\ref{sec:experiments},
+Table~\ref{tab:itervt}). It is scoped to reference-chain tasks: on
+independent-needle tasks it is a no-op (single-needle $100{=}100$) and can
+slightly dilute multi-key retrieval, so the default single-shot BM25 remains the
+selector elsewhere.
+
+\paragraph{Comparison selectors.} Two further selectors and an upper bound are
+used only for analysis (\S\ref{sec:experiments}, Table~\ref{tab:selector}):
+\texttt{reader\_attn}, which scores chunks by the cosine similarity between the
+query's $h_j$ and each chunk's $h_j$; \texttt{recency}, which keeps the most
+recent chunks (a StreamingLLM-style positional prior); and \texttt{oracle},
+which always includes the gold chunk and quantifies the retrieval ceiling. None
+is used in the default CoMem configuration.
+
+\subsection{The depth knob and training}
+\label{subsec:jknob}
+
+\paragraph{The $j$ knob.} The split depth $j$ interpolates between two exact
+endpoints. At $j{=}0$ the read recomputes \emph{all} layers over the retrieved
+raw tokens; a self-test confirms this equals the full forward to
+$\max|\Delta\text{logit}|<10^{-4}$ on the dense 8B backbone (and exactly
+$0.0$ on the Hunyuan MoE, \S\ref{sec:experiments}), so $j{=}0$ is exact
+full-context RAG recompute---the training-free residual-stream recompute of
+KV-Direct \citep{kvdirect}. At $j{=}L$ nothing is recomputed and the model is
+closed-book. Intermediate $j$ trades cache compressibility (deeper $j$ stores a
+more digested, cheaper-to-recompute hidden) against readout fidelity (deeper $j$
+has committed more to a query-blind continuation). The cacheable sweet spot
+lands at $\approx 0.33$--$0.40\!\cdot\!L$ across backbones---Qwen3-8B at
+$j{=}12$ and the Hunyuan 80-layer MoE at $j{\approx}32$
+($0.40\!\cdot\!L$)---and $j$ is exposed as a single deployment-time dial rather
+than a fixed architectural choice.
+
+\paragraph{Self-distillation.} With no training, the usable cache depth on
+Qwen3-8B saturates around $j{\le}9$; recomputing from $j{=}12$ zero-shot loses
+accuracy. We recover it with a light self-distillation: a student that reads
+from $j{=}12$ is trained to match a $j{=}0$ teacher (which sees the full
+recompute) by KL divergence on their next-token distributions. Training uses a
+LoRA adapter ($r{=}32$, $\alpha{=}64$) on the backbone, $4000$ steps of 8-GPU
+DDP, over plain PG19 continuous windows only---\emph{no synthetic
+long-context data, no task supervision, and no retrieval in the loop}. This
+alone pushes the usable cache depth from $j{\le}9$ to $j{\ge}12$, and because
+the objective is generic language modeling the resulting memory transfers
+zero-shot across benchmarks and backbone families.
+
+\paragraph{No special pretraining is required.} We stress that CoMem operates on
+a stock, frozen backbone: the depth partition, the retrieval readout, and the
+$j$ knob all work zero-training, and the self-distilled LoRA above is a light,
+optional add-on rather than a prerequisite. A separate line of work asks whether
+the cache point can be made \emph{compressible by design}---inserting a
+low-rank funnel at layer $j$ during from-scratch pretraining so the depth-$j$
+hidden is intrinsically lower-rank---which is complementary to, but not required
+by, CoMem and orthogonal to train-time token-axis compression such as
+\citet{kvcat}; we treat it as companion work and make no such claim here.

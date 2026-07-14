@@ -1,0 +1,35 @@
+% BABILong. n=100, official compare_answers. From draft §2.4 (verified).
+% Panel A: CoMem best-topk full 0k-32k sweep. Panel B: three-way at 4k-32k.
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{@{}llccccccc@{}}
+\toprule
+\multicolumn{9}{@{}l}{\textit{(a) CoMem best-top-$k$, full length sweep}} \\
+\textbf{Task} & & 0k & 1k & 2k & 4k & 8k & 16k & 32k \\
+\midrule
+qa1 (single-fact) & & 98 & 79 & 68 & 66 & 63 & 57 & 28 \\
+qa5 (relational)  & & 69 & 77 & 75 & 76 & 79 & 67 & 63 \\
+\midrule
+\multicolumn{9}{@{}l}{\textit{(b) three-way (official \texttt{compare\_answers})}} \\
+\textbf{Task} & \textbf{Method} & & & 4k & 8k & 16k & 32k & \\
+\midrule
+\multirow{3}{*}{qa1} & CoMem      & & & 66 & 63 & 57 & 28 & \\
+                     & KV-Direct  & & & \textbf{75} & \textbf{80} & \textbf{72} & \textbf{62} & \\
+                     & HCache     & & & 16 & \phantom{0}3 & \phantom{0}0 & \phantom{0}0 & \\
+\midrule
+\multirow{3}{*}{qa5} & CoMem      & & & \textbf{76} & \textbf{79} & \textbf{67} & \textbf{63} & \\
+                     & KV-Direct  & & & 61 & 68 & 44 & 58 & \\
+                     & HCache     & & & 65 & 52 & 19 & \phantom{0}4 & \\
+\bottomrule
+\end{tabular}
+\caption{BABILong ($n{=}100$, official \texttt{compare\_answers}). (a) CoMem
+best-top-$k$ across the full length sweep. (b) three-way comparison. The honest
+boundary: KV-Direct (full context) wins single-fact localization (qa1) inside
+the window, while CoMem wins relational reasoning (qa5), especially at long
+range (16k 67 vs.\ 44). HCache (no retrieval) survives only short redundant-fact
+qa5 (4k 65) and crashes elsewhere---a retrieval failure, not a capacity one.
+Against the same-class MemoryLLM (calibrated), CoMem is $2.85\times$ on qa1 16k
+(57 vs.\ 20) and higher on qa5 16k (67 vs.\ 38).}
+\label{tab:babilong}
+\end{table}
