@@ -1,32 +1,51 @@
 #!/usr/bin/env python
 """CoMem self-distillation — recover the mid-depth-resume depth cliff with LoRA.
 
-The zero-training CoMem read already breaks the read-out gap at moderate ``j`` but
+The zero-training CoMem read already closes the read-out gap at moderate ``j`` but
 COLLAPSES on precise-localisation tasks (the "depth cliff"). This trains a LoRA
-self-distillation to push the cliff back:
+self-distillation to push the cliff back, so the model can be resumed from a
+deeper ``j`` while staying close to the RAG upper bound:
 
-  * TEACHER = CoMem read at ``j = 0`` (RAG upper bound: retrieved chunks
-    re-forwarded through the WHOLE model with the query present), adapters DISABLED
-    under ``no_grad`` -> exactly the frozen base model on the packed sequence.
-  * STUDENT = CoMem read at ``j = --resume_j``: chunks cached at depth ``j`` from
-    the FROZEN bottom ``layers[0:j]``; LoRA on ``layers[j:]`` ONLY learns to
-    reconstruct the teacher from the shallow cache.
-  * LOSS = bidirectional top-k KL on the QUERY-segment tokens (+ optional CE to
-    teacher argmax).
-  * DATA = PG19 natural text (``--pg19_path``, one JSONL line per doc), streamed +
-    tokenised on the fly, packed into ``[sink ; ctx chunks ; query chunk]``. PURE
-    self-supervision — NO eval data.
+  * TEACHER = CoMem read at ``j = 0`` (RAG upper bound: retrieved chunks are
+    re-forwarded through the WHOLE model with the query present), with the LoRA
+    adapters DISABLED (``peft.disable_adapter()``) under ``no_grad`` -> exactly the
+    frozen base model on the packed sequence.
+  * STUDENT = CoMem read at ``j = --j``: chunks cached at depth ``j`` from the
+    FROZEN bottom ``layers[0:j]``; LoRA on ``layers[j:]`` ONLY learns to
+    reconstruct the teacher from the shallow cache. Backbone is frozen.
+  * LOSS = bidirectional top-k KL on the teacher's top-k support over the
+    QUERY-segment tokens: ``lam*KL(p||q) + (1-lam)*KL(q||p)`` (+ optional tiny CE
+    to the teacher argmax).
+  * DATA = PG19 natural text (``--data``, one JSONL line or raw text line per doc),
+    streamed + tokenised on the fly, packed into ``[sink ; ctx chunks ; query]``.
+    PURE self-supervision — NO eval data.
 
-Teacher + student share ONE model (adapters on/off), so no second copy in memory.
-Single- or multi-GPU DDP (explicit grad all-reduce, since the read runs the layers
-directly rather than through ``DDP.forward``). Load the resulting adapter with
-``CoMem(..., lora_adapter=...)`` via ``eval._common.load_backbone``.
+Teacher + student share ONE model instance (adapters on/off), so no second copy in
+memory; only the LoRA params (+ AdamW state) are trainable. Single- or multi-GPU
+DDP (explicit grad all-reduce, since the read runs the layers directly rather than
+through ``DDP.forward``). Load the resulting adapter for eval with ``--adapter``:
+
+    python -m eval.run --benchmark ruler --model <PATH> --j auto \\
+        --adapter outputs/comem_distill_j12/final ...
+
+The core CoMem method is TRAINING-FREE; this distillation is an OPTIONAL enhancement
+that lets you resume from a deeper ``j`` (cheaper read) without the depth cliff.
+
+Correctness: ``--self_test`` re-checks that at ``j=0`` (adapters off) the CoMem
+read/write packing reproduces a stock full forward, and that ``resume_forward_ids``
+at the training ``j`` reproduces the full forward on a single contiguous sequence
+(both to fp32 tolerance) before any weights move.
 
 Usage:
+    # single GPU
+    python -m train.distill --model /path/to/Qwen3-8B --j auto \\
+        --data data/pg19_train.jsonl --out outputs/comem_distill_j12
+
+    # 8-GPU DDP
     torchrun --nproc_per_node 8 -m train.distill \\
-        --model_path /path/to/Qwen3-8B --resume_j 12 --lora_rank 16 \\
-        --pg19_path data/pg19_train.jsonl --total_steps 1000 \\
-        --output_dir outputs/comem_distill_j12
+        --model /path/to/Qwen3-8B --j 12 --lora_rank 32 \\
+        --data data/pg19_train.jsonl --total_steps 1000 \\
+        --out outputs/comem_distill_j12
 """
 from __future__ import annotations
 
@@ -45,10 +64,11 @@ import torch.nn.functional as F
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from comem import CoMem  # noqa: E402
+from comem.model_registry import resolve_resume_j  # noqa: E402
 
 
 # --------------------------------------------------------------------------- #
-# top-k KL distillation loss (Scheme-A bidirectional, on teacher top-k support)
+# top-k KL distillation loss (bidirectional, on the teacher top-k support)
 # --------------------------------------------------------------------------- #
 def _weighted_token_mean(loss, token_weight=None):
     if token_weight is None:
@@ -100,7 +120,10 @@ def _is_main(rank):
 class PG19Packer:
     """Stream a JSONL / raw-text corpus, tokenise on the fly, yield packed windows
     of ``(n_ctx + 1) * chunk_size`` tokens = ``n_ctx`` context chunks + 1 query
-    chunk. Sharded across DDP ranks by ``[rank::world_size]`` over produced windows."""
+    chunk. If a line parses as JSON with a ``"text"`` field, that field is used;
+    otherwise the raw line is tokenised. Sharded across DDP ranks by
+    ``[rank::world_size]`` over produced windows so each rank sees a disjoint
+    stream. The corpus loops indefinitely (training is step-bounded)."""
 
     def __init__(self, path, tokenizer, chunk_size, n_ctx, rank, world_size, seed):
         self.path = path
@@ -112,16 +135,30 @@ class PG19Packer:
         self.world_size = world_size
         self.seed = seed
 
+    @staticmethod
+    def _line_text(line):
+        line = line.strip()
+        if not line:
+            return None
+        if line[0] in "{[":
+            try:
+                obj = json.loads(line)
+                if isinstance(obj, dict):
+                    return obj.get("text") or obj.get("content") or ""
+            except json.JSONDecodeError:
+                pass
+        return line
+
     def _windows(self):
         buf: List[int] = []
         wcount = 0
         while True:
             with open(self.path, "r", encoding="utf-8") as f:
                 for line in f:
-                    line = line.strip()
-                    if not line:
+                    text = self._line_text(line)
+                    if not text:
                         continue
-                    buf.extend(self.tok.encode(line, add_special_tokens=False))
+                    buf.extend(self.tok.encode(text, add_special_tokens=False))
                     while len(buf) >= self.window_len:
                         w = buf[: self.window_len]
                         buf = buf[self.window_len:]
@@ -136,37 +173,126 @@ class PG19Packer:
             yield {"ctx": chunks[: self.n_ctx], "query": chunks[self.n_ctx]}
 
 
-def main():
+# --------------------------------------------------------------------------- #
+# self-test gate — teacher (j=0, adapters off) == stock full forward
+# --------------------------------------------------------------------------- #
+@torch.no_grad()
+def run_self_test(peft_model, comem_j, comem_0, tokenizer, device, resume_j):
+    """Before any weights move, verify on the FROZEN backbone (adapters off):
+
+      (A) CoMem j=0 write/read packing == stock ``model(input_ids)`` forward, and
+      (B) ``resume_forward_ids`` at the training ``j`` == the full forward on a
+          single contiguous sequence (holds for any ``j``).
+
+    Uses fp32 for the <1e-4 gate.
+    """
+    print("=" * 72)
+    print(f"CoMem distill self-test (resume_j={resume_j})")
+    print("=" * 72)
+    V = int(comem_0.config.vocab_size)
+    bos_id = tokenizer.bos_token_id if tokenizer.bos_token_id is not None else 0
+
+    def rid(n):
+        return torch.randint(0, V, (1, n), device=device)
+
+    sink = torch.tensor([[bos_id]], device=device)
+    c1, c2, c3 = rid(37), rid(29), rid(41)
+    q = rid(23)
+    packed = torch.cat([sink, c1, c2, c3, q], dim=1)
+
+    with peft_model.disable_adapter():
+        ref = comem_0.full_forward_logits(packed)
+        sh = comem_0.write_chunk(sink)
+        ch = [comem_0.write_chunk(c) for c in (c1, c2, c3)]
+        qh = comem_0.write_chunk(q)
+        out_pack = comem_0.read(sh, ch, qh)
+        diff_pack = (out_pack.float() - ref.float()).abs().max().item()
+
+        out_j = comem_j.resume_forward_ids(packed)
+        diff_j = (out_j.float() - ref.float()).abs().max().item()
+
+    tol = 1e-4
+    print(f"  (A) read/write packing (j=0) max|diff| = {diff_pack:.3e}  "
+          f"{'PASS' if diff_pack < tol else 'FAIL'}")
+    print(f"  (B) resume_forward_ids (j={resume_j}) single-seq max|diff| = "
+          f"{diff_j:.3e}  {'PASS' if diff_j < tol else 'FAIL'}")
+    ok = diff_pack < tol and diff_j < tol
+    print("-" * 72)
+    print(f"SELF-TEST: {'ALL PASS' if ok else 'FAILURE — DO NOT TRAIN'}")
+    print("=" * 72)
+    return ok
+
+
+# --------------------------------------------------------------------------- #
+# main
+# --------------------------------------------------------------------------- #
+def _j_type(value):
+    """argparse type for ``--j`` / ``--resume_j``: an int, or the string 'auto'."""
+    if isinstance(value, str) and value.strip().lower() == "auto":
+        return "auto"
+    return int(value)
+
+
+def build_argparser():
     p = argparse.ArgumentParser(description="CoMem LoRA self-distillation on PG19")
-    p.add_argument("--model_path", required=True)
-    p.add_argument("--resume_j", type=int, default=12)
-    p.add_argument("--top_prepay_b", type=int, default=0)
-    p.add_argument("--lora_rank", type=int, default=16)
+    # model / split depth (unified eval CLI: --model / --j <int|auto>)
+    p.add_argument("--model", "--model_path", dest="model_path", required=True,
+                   help="Local HF causal-LM path.")
+    p.add_argument("--j", "--resume_j", dest="resume_j", type=_j_type, default=12,
+                   help="Student resume depth j (int or 'auto' -> model_registry). "
+                        "Teacher is always j=0.")
+    p.add_argument("--top_prepay_b", type=int, default=0,
+                   help="Student top-prepay b (0 = exact connective resume).")
+    # LoRA
+    p.add_argument("--lora_rank", type=int, default=32)
     p.add_argument("--lora_alpha", type=int, default=32)
     p.add_argument("--lora_dropout", type=float, default=0.0)
     p.add_argument("--lora_targets",
-                   default="q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj")
-    p.add_argument("--pg19_path", default="data/pg19_train.jsonl")
+                   default="q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj",
+                   help="Comma-sep linear submodule names to LoRA-fy in layers[j:].")
+    # data
+    p.add_argument("--data", "--pg19_path", dest="data", default="data/pg19_train.jsonl",
+                   help="PG19/raw-text corpus (JSONL with 'text', or one doc per line).")
     p.add_argument("--chunk_size", type=int, default=512)
-    p.add_argument("--n_ctx", type=int, default=3)
-    p.add_argument("--query_loss_tokens", type=int, default=0)
-    p.add_argument("--teacher_topk", type=int, default=64)
-    p.add_argument("--distill_lambda", type=float, default=0.6)
-    p.add_argument("--ce_weight", type=float, default=0.0)
+    p.add_argument("--n_ctx", type=int, default=7,
+                   help="Context chunks per pack (window = (n_ctx+1)*chunk_size).")
+    p.add_argument("--query_loss_tokens", type=int, default=0,
+                   help="If >0, take the distill loss on only the last N query "
+                        "tokens (0 = all query-chunk tokens).")
+    # teacher / loss
+    p.add_argument("--teacher_topk", type=int, default=64,
+                   help="Top-k teacher-logit support for the KL.")
+    p.add_argument("--distill_lambda", type=float, default=0.6,
+                   help="lam*KL(p||q)+(1-lam)*KL(q||p) on the teacher top-k support.")
+    p.add_argument("--ce_weight", type=float, default=0.0,
+                   help="Optional CE-to-teacher-argmax weight added to the KL.")
+    # optim
     p.add_argument("--total_steps", type=int, default=1000)
     p.add_argument("--lr", type=float, default=1e-4)
     p.add_argument("--warmup_steps", type=int, default=50)
     p.add_argument("--weight_decay", type=float, default=0.0)
     p.add_argument("--grad_accum", type=int, default=1)
     p.add_argument("--grad_clip", type=float, default=1.0)
-    p.add_argument("--gradient_checkpointing", action="store_true", default=False)
-    p.add_argument("--output_dir", required=True)
+    p.add_argument("--gradient_checkpointing", action=argparse.BooleanOptionalAction,
+                   default=True, help="Grad-checkpoint the read layer loop (default on).")
+    # io
+    p.add_argument("--out", "--output_dir", dest="output_dir", required=True,
+                   help="Adapter output dir (feed <out>/final to eval --adapter).")
     p.add_argument("--save_interval", type=int, default=250)
     p.add_argument("--log_interval", type=int, default=10)
-    p.add_argument("--dtype", default="bfloat16", choices=["bfloat16", "float16", "float32"])
+    p.add_argument("--dtype", default="bfloat16",
+                   choices=["bfloat16", "float16", "float32"])
     p.add_argument("--attn_impl", default="sdpa")
     p.add_argument("--seed", type=int, default=42)
-    args = p.parse_args()
+    p.add_argument("--self_test", action="store_true", default=False,
+                   help="Run the fp32 correctness gate and exit (no training).")
+    p.add_argument("--wandb_project", default="comem")
+    p.add_argument("--wandb_run_name", default="")
+    return p
+
+
+def main():
+    args = build_argparser().parse_args()
 
     from transformers import AutoModelForCausalLM, AutoTokenizer
     from peft import LoraConfig, get_peft_model, TaskType
@@ -175,19 +301,38 @@ def main():
     device = torch.device(f"cuda:{local_rank}" if torch.cuda.is_available() else "cpu")
     torch.manual_seed(args.seed + rank)
     random.seed(args.seed + rank)
+
+    # --j auto -> concrete int via the shared model registry
+    if args.resume_j == "auto":
+        args.resume_j = resolve_resume_j(args.model_path)
+
     dtype = {"bfloat16": torch.bfloat16, "float16": torch.float16,
              "float32": torch.float32}[args.dtype]
+    if args.self_test:
+        dtype = torch.float32  # tight tolerance
+
+    if _is_main(rank):
+        print(f"[comem-distill] model={args.model_path} j={args.resume_j} "
+              f"b={args.top_prepay_b} lora_r={args.lora_rank} "
+              f"chunk={args.chunk_size} n_ctx={args.n_ctx} dtype={dtype} "
+              f"world_size={world_size}", flush=True)
 
     tokenizer = AutoTokenizer.from_pretrained(args.model_path, trust_remote_code=True,
                                               local_files_only=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     base = AutoModelForCausalLM.from_pretrained(
-        args.model_path, dtype=dtype, attn_implementation=args.attn_impl,
+        args.model_path, torch_dtype=dtype, attn_implementation=args.attn_impl,
         trust_remote_code=True, local_files_only=True).to(device)
     base.config.use_cache = False
     L = int(base.config.num_hidden_layers)
+    if not (0 <= args.resume_j <= L):
+        raise SystemExit(f"resume_j must be in [0,{L}]; got {args.resume_j}")
+    if not (0 <= args.top_prepay_b <= L - args.resume_j):
+        raise SystemExit(f"top_prepay_b must be in [0,{L-args.resume_j}]; got "
+                         f"{args.top_prepay_b}")
 
+    # Freeze the backbone, attach LoRA to layers[resume_j:] ONLY.
     for prm in base.parameters():
         prm.requires_grad = False
     targets = [t.strip() for t in args.lora_targets.split(",") if t.strip()]
@@ -196,25 +341,43 @@ def main():
         lora_dropout=args.lora_dropout, target_modules=targets,
         layers_to_transform=list(range(args.resume_j, L)), layers_pattern="layers")
     peft_model = get_peft_model(base, lora_cfg)
-    causal_lm = peft_model.base_model.model
-    peft_model.train()
-    if args.gradient_checkpointing:
-        base.gradient_checkpointing_enable()
-
-    qc = CoMem(causal_lm, resume_j=args.resume_j, top_prepay_b=args.top_prepay_b,
-               tokenizer=tokenizer)
-    qc.grad_checkpoint = bool(args.gradient_checkpointing)
+    causal_lm = peft_model.base_model.model  # underlying *ForCausalLM CoMem reads off
     train_params = [prm for prm in peft_model.parameters() if prm.requires_grad]
     if _is_main(rank):
         print(f"[comem-distill] LoRA on layers[{args.resume_j}:{L}] targets={targets} "
               f"-> trainable {sum(x.numel() for x in train_params)/1e6:.2f}M", flush=True)
 
+    # student (j) + teacher (j=0) CoMem orchestrators — thin, no params, one model.
+    qc = CoMem(causal_lm, resume_j=args.resume_j, top_prepay_b=args.top_prepay_b,
+               tokenizer=tokenizer)
+    qc.grad_checkpoint = bool(args.gradient_checkpointing)
+    qc_teacher = CoMem(causal_lm, resume_j=0, top_prepay_b=0, tokenizer=tokenizer)
+
+    if args.self_test:
+        ok = True
+        if _is_main(rank):
+            ok = run_self_test(peft_model, qc, qc_teacher, tokenizer, device,
+                               args.resume_j)
+        if world_size > 1:
+            dist.barrier()
+            dist.destroy_process_group()
+        sys.exit(0 if ok else 1)
+
+    peft_model.train()
+    if args.gradient_checkpointing:
+        base.gradient_checkpointing_enable()
+
+    # DDP note: the student read runs the decoder layers DIRECTLY (not through a
+    # DistributedDataParallel.forward), so DDP's grad-reduction hooks would never
+    # fire. We instead broadcast the (replicated) adapter from rank 0 and do an
+    # EXPLICIT grad all-reduce (mean over ranks) after backward. Each rank streams
+    # a disjoint PG19 shard ([rank::world_size]).
     def _allreduce_grads_mean():
         if world_size <= 1:
             return
         for prm in train_params:
             if prm.grad is None:
-                prm.grad = torch.zeros_like(prm)
+                prm.grad = torch.zeros_like(prm)  # keep ranks in lock-step
             dist.all_reduce(prm.grad, op=dist.ReduceOp.SUM)
             prm.grad /= world_size
 
@@ -230,10 +393,20 @@ def main():
         prog = (step - args.warmup_steps) / max(1, args.total_steps - args.warmup_steps)
         return 0.5 * args.lr * (1.0 + math.cos(math.pi * min(1.0, prog)))
 
+    # wandb (main only, offline-safe)
+    wb = None
+    if _is_main(rank) and args.wandb_run_name:
+        try:
+            import wandb
+            wb = wandb.init(project=args.wandb_project, name=args.wandb_run_name,
+                            config=vars(args))
+        except Exception as e:  # pragma: no cover
+            print(f"[comem-distill] wandb init failed ({e}); continuing", flush=True)
+
     bos_id = tokenizer.bos_token_id
     if bos_id is None:
         bos_id = tokenizer.eos_token_id
-    packer = PG19Packer(args.pg19_path, tokenizer, args.chunk_size, args.n_ctx,
+    packer = PG19Packer(args.data, tokenizer, args.chunk_size, args.n_ctx,
                         rank, world_size, args.seed)
     stream = packer.stream()
     os.makedirs(args.output_dir, exist_ok=True)
@@ -251,14 +424,14 @@ def main():
         for g in opt.param_groups:
             g["lr"] = lr_at(step)
 
-        # TEACHER: j=0 read (adapters disabled), no grad
+        # ======== TEACHER: j=0 read (adapters disabled), no grad ========
         with torch.no_grad():
             with peft_model.disable_adapter():
-                qc_t = CoMem(causal_lm, resume_j=0, top_prepay_b=0, tokenizer=tokenizer)
-                t_sink = qc_t.write_chunk([bos_id])
-                t_ctx = [qc_t.write_chunk(c) for c in ctx_chunks]
-                t_q = qc_t.write_chunk(query_chunk)
-                t_logits = qc_t.read_core(t_sink, t_ctx, t_q, logits_tail=T_q)[0].float()
+                t_sink = qc_teacher.write_chunk([bos_id])
+                t_ctx = [qc_teacher.write_chunk(c) for c in ctx_chunks]
+                t_q = qc_teacher.write_chunk(query_chunk)
+                t_logits = qc_teacher.read_core(t_sink, t_ctx, t_q,
+                                                logits_tail=T_q)[0].float()
                 n_loss = min(args.query_loss_tokens, T_q) if args.query_loss_tokens > 0 else T_q
                 t_loss_logits = t_logits[-n_loss:]
                 tk = torch.topk(t_loss_logits,
@@ -266,7 +439,9 @@ def main():
                 teacher_idx, teacher_val = tk.indices, tk.values
                 teacher_argmax = teacher_idx[:, 0]
 
-        # STUDENT: j=resume_j read (adapters ON), grad only in layers[j:]
+        # ======== STUDENT: j read (adapters ON), grad only in layers[j:] ========
+        # sink + context caches come from the FROZEN bottom layers[0:j] (no grad,
+        # no adapters below j) -> under no_grad; only the resume path is grad-bearing.
         with torch.no_grad():
             s_sink = qc.write_chunk([bos_id])
             s_ctx = [qc.write_chunk(c) for c in ctx_chunks]
@@ -290,10 +465,13 @@ def main():
             opt.zero_grad(set_to_none=True)
             step += 1
             if _is_main(rank) and step % args.log_interval == 0:
+                avg = running / max(1, seen)
                 dt = time.time() - t0
                 print(f"[comem-distill] step {step}/{args.total_steps} "
-                      f"loss {running/max(1,seen):.4f} lr {lr_at(step):.2e} "
+                      f"loss {avg:.4f} lr {lr_at(step):.2e} "
                       f"{seen*world_size/dt:.1f} samp/s", flush=True)
+                if wb is not None:
+                    wb.log({"loss": avg, "lr": lr_at(step), "step": step})
                 running, seen, t0 = 0.0, 0, time.time()
             if _is_main(rank) and (step % args.save_interval == 0 or step == args.total_steps):
                 sd = os.path.join(args.output_dir, f"step{step}")
@@ -306,6 +484,8 @@ def main():
         os.makedirs(fd, exist_ok=True)
         peft_model.save_pretrained(fd)
         print(f"[comem-distill] DONE -> {fd}", flush=True)
+        if wb is not None:
+            wb.finish()
     if world_size > 1:
         dist.barrier()
         dist.destroy_process_group()
