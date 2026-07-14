@@ -281,10 +281,15 @@ def main():
     p.add_argument("--baseline", default="none", choices=_cli.BASELINE_CHOICES)
     p.add_argument("--selector", default="bm25",
                    choices=["bm25", "recency", "oracle", "reader_attn",
-                            "iter_reader_attn", "iter_bm25"])
+                            "iter_reader_attn", "iter_bm25", "iter_bm25_adaptive"])
     p.add_argument("--iter_rounds", type=int, default=0)
     p.add_argument("--iter_hop_topk", type=int, default=2)
     p.add_argument("--iter_score", default="meanpool", choices=["meanpool", "maxsim"])
+    p.add_argument("--iter_conf_ratio", type=float, default=0.3,
+                   help="iter_bm25_adaptive: stop a hop when its best BM25 score "
+                        "falls below this ratio times the round-1 best score.")
+    p.add_argument("--iter_max_chunks", type=int, default=64,
+                   help="iter_bm25_adaptive: hard cap on accumulated chunks.")
     p.add_argument("--topk", type=int, default=12)
     p.add_argument("--sink_tokens", default="bos", choices=["bos", "none"])
     p.add_argument("--chunk_size", type=int, default=512)
@@ -364,7 +369,9 @@ def main():
                             sink_tokens=args.sink_tokens, needle_chunk_set=needle_set,
                             bare_question_ids=bare_q_ids, no_retrieval=no_retrieval,
                             iter_rounds=args.iter_rounds, iter_hop_topk=args.iter_hop_topk,
-                            iter_score=args.iter_score)
+                            iter_score=args.iter_score,
+                            iter_conf_ratio=args.iter_conf_ratio,
+                            iter_max_chunks=args.iter_max_chunks)
                 except RuntimeError as e:
                     if "out of memory" not in str(e).lower():
                         raise

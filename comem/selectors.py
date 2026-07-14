@@ -15,6 +15,11 @@ Selectors
 * ``iter_bm25``        — multi-hop BFS BM25: round 1 == single-shot ``bm25``,
                          later rounds re-query with the previous picks' token
                          text to walk a lexical reference chain (RULER vt).
+* ``iter_bm25_adaptive`` — like ``iter_bm25`` but confidence-adaptive: no fixed
+                         ``topk`` budget; stop when a round's best score drops
+                         below ``conf_ratio``× the round-1 best (chain end /
+                         spurious link) or ``max_chunks`` is hit, so short chains
+                         don't hard-fill low-score noise chunks into the read.
 * ``reader_attn``      — highest query-``h_j`` vs chunk-``h_j`` mean-pool cosine
                          (semantic; reuses the cached ``write_chunk`` hiddens).
 * ``iter_reader_attn`` — multi-hop BFS over the cached ``h_j`` (round 1 from the
@@ -280,6 +285,78 @@ def iter_bm25_indices(
 
 
 # --------------------------------------------------------------------------- #
+# iterative multi-hop LEXICAL selector, adaptive stop (iter_bm25_adaptive)
+# --------------------------------------------------------------------------- #
+def iter_bm25_adaptive_indices(
+    context_chunks,        # list[LongTensor] == context chunks (doc order)
+    query_ids,             # list[int] bare-question token ids (round-1 query)
+    iter_hop_topk: int = 4,
+    conf_ratio: float = 0.3,
+    max_chunks: int = 64,
+):
+    """Iterative multi-hop lexical (BM25) chunk selection with a CONFIDENCE-based
+    adaptive stop (drop-in variant of :func:`iter_bm25_indices`).
+
+    Same BFS walk as ``iter_bm25`` (round 1 == single-shot ``bm25``; later rounds
+    re-query BM25 with the previous round's picks' concatenated token text; IDF is
+    the full context pool every round, so round 1 is bit-for-bit the ``bm25``
+    ranking), but replaces the fixed ``topk`` budget with an adaptive stop:
+
+    * record ``s1`` = round 1's best BM25 score (the confidence reference);
+    * each LATER round, if that round's best candidate score ``< conf_ratio * s1``
+      the chain has ended / the next hop is a spurious lexical link -> **break**
+      (do not pull the low-score chunk in, unlike the fixed-budget ``iter_bm25``
+      which hard-fills to ``topk`` and drags noise into the read);
+    * ``max_chunks`` is a safety cap on the accumulated chunk count.
+
+    Every round still takes the top ``iter_hop_topk`` new chunks with ``score>0``
+    (chain-end guard). The loop stops on the FIRST of: (1) confidence below
+    ``conf_ratio * s1``, (2) ``max_chunks`` reached, (3) no ``score>0`` candidate.
+    Returns a sorted list of context-chunk indices.
+    """
+    n = len(context_chunks)
+    if n == 0:
+        return []
+    hop = max(1, int(iter_hop_topk))
+    cap = max(1, int(max_chunks))
+    ratio = float(conf_ratio)
+
+    docs = [c.tolist() for c in context_chunks]     # BM25 corpus (fixed IDF pool)
+
+    selected: list = []
+    selected_set: set = set()
+    frontier_query = list(query_ids)                # round 1 == single-shot bm25
+    s1 = None                                       # round-1 best score (confidence ref)
+    while True:
+        if len(selected) >= cap:
+            break
+        if not frontier_query:
+            break
+        scores = bm25_scores(docs, frontier_query)
+        if not scores:
+            break
+        cand = [i for i in range(n) if i not in selected_set]
+        cand = [i for i in cand if scores[i] > 0.0]
+        if not cand:
+            break
+        cand.sort(key=lambda i: scores[i], reverse=True)
+        best = scores[cand[0]]
+        if s1 is None:
+            s1 = best                               # round 1 sets the reference
+        elif best < ratio * s1:
+            break                                   # relative-confidence early stop
+        remaining = cap - len(selected)
+        take = min(hop, remaining, len(cand))
+        new_sel = cand[:take]
+        selected.extend(new_sel)
+        selected_set.update(new_sel)
+        frontier_query = []
+        for i in new_sel:
+            frontier_query.extend(docs[i])
+    return sorted(selected)
+
+
+# --------------------------------------------------------------------------- #
 # top-level dispatch
 # --------------------------------------------------------------------------- #
 def select_context_chunk_indices(
@@ -293,6 +370,8 @@ def select_context_chunk_indices(
     iter_rounds=0,
     iter_hop_topk=2,
     iter_score="meanpool",
+    iter_conf_ratio=0.3,
+    iter_max_chunks=64,
 ):
     """Return a sorted list of context-chunk indices to pack into the read,
     chosen by the requested selector (see module docstring). Selectors that need
@@ -334,6 +413,16 @@ def select_context_chunk_indices(
         return iter_bm25_indices(
             context_chunks, list(query_ids), topk=k,
             iter_rounds=iter_rounds, iter_hop_topk=iter_hop_topk,
+        )
+
+    if selector == "iter_bm25_adaptive":
+        # Adaptive-stop variant of iter_bm25: no fixed topk budget — walk the
+        # lexical chain until confidence drops below iter_conf_ratio * (round-1
+        # best score), max_chunks is hit, or no positive-overlap candidate remains.
+        return iter_bm25_adaptive_indices(
+            context_chunks, list(query_ids),
+            iter_hop_topk=iter_hop_topk,
+            conf_ratio=iter_conf_ratio, max_chunks=iter_max_chunks,
         )
 
     if selector == "reader_attn":

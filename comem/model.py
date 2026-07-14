@@ -679,6 +679,8 @@ class CoMem:
         iter_rounds: int = 0,
         iter_hop_topk: int = 2,
         iter_score: str = "meanpool",
+        iter_conf_ratio: float = 0.3,
+        iter_max_chunks: int = 64,
         use_kv_cache: bool = True,
         tokenizer=None,
     ) -> str:
@@ -715,6 +717,7 @@ class CoMem:
                 needle_chunk_set, context_hj=context_hj, query_hj=query_hj_for_sel,
                 iter_rounds=iter_rounds, iter_hop_topk=iter_hop_topk,
                 iter_score=iter_score,
+                iter_conf_ratio=iter_conf_ratio, iter_max_chunks=iter_max_chunks,
             )
 
         if context_hj is not None:
@@ -779,6 +782,8 @@ class CoMem:
         iter_rounds: int = 0,
         iter_hop_topk: int = 2,
         iter_score: str = "meanpool",
+        iter_conf_ratio: float = 0.3,
+        iter_max_chunks: int = 64,
         use_kv_cache: bool = True,
         stats=None,
     ) -> List[int]:
@@ -810,6 +815,7 @@ class CoMem:
                 context_hj=context_hj, query_hj=query_hj_for_sel,
                 iter_rounds=iter_rounds, iter_hop_topk=iter_hop_topk,
                 iter_score=iter_score,
+                iter_conf_ratio=iter_conf_ratio, iter_max_chunks=iter_max_chunks,
             )
 
         selected_hj = [context_hj[i] for i in sel_idx]
@@ -834,6 +840,8 @@ class CoMem:
         iter_rounds: int = 0,
         iter_hop_topk: int = 2,
         iter_score: str = "meanpool",
+        iter_conf_ratio: float = 0.3,
+        iter_max_chunks: int = 64,
         use_kv_cache: bool = True,
         stats=None,
     ) -> str:
@@ -852,6 +860,7 @@ class CoMem:
             max_new_tokens=max_new_tokens, bm25_query_ids=bq_ids,
             needle_chunk_set=needle_chunk_set, iter_rounds=iter_rounds,
             iter_hop_topk=iter_hop_topk, iter_score=iter_score,
+            iter_conf_ratio=iter_conf_ratio, iter_max_chunks=iter_max_chunks,
             use_kv_cache=use_kv_cache, stats=stats,
         )
         return self.tokenizer.decode(generated, skip_special_tokens=True).strip()

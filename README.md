@@ -61,7 +61,10 @@ answer = model.generate("What is X?",           # retrieve topk → resume → d
 
 - `selector`: `bm25` (lexical), `reader_attn` (cosine over `h_j`), `iter_bm25` /
   `iter_reader_attn` (multi-hop BFS for reference chains, e.g. RULER variable
-  tracking), `recency`, `oracle`.
+  tracking), `iter_bm25_adaptive` (confidence-adaptive `iter_bm25`: no fixed
+  `topk` budget — walk the chain until a hop's best score drops below
+  `--iter_conf_ratio`× the round-1 best or `--iter_max_chunks` is hit, so short
+  chains don't hard-fill low-score noise chunks), `recency`, `oracle`.
 - `mode`: `comem` (retrieval, fixed read; default), `kvdirect` / `hcache`
   (no-retrieval baselines that pack **all** chunks — read grows O(context); build
   `CoMem(resume_j=0)` for a faithful `kvdirect`).
@@ -72,7 +75,7 @@ answer = model.generate("What is X?",           # retrieve topk → resume → d
 ```
 comem/
   model.py       # class CoMem: primitives (write/read/decode/resume) + encode/generate
-  selectors.py   # bm25 / iter_bm25 / reader_attn / iter_reader_attn / recency / oracle
+  selectors.py   # bm25 / iter_bm25 / iter_bm25_adaptive / reader_attn / iter_reader_attn / recency / oracle
   moe.py         # CoMemMoE: device_map-sharded MoE variant
   selftest.py    # CPU correctness gate (python -m comem.selftest)
 train/distill.py # LoRA self-distillation (teacher j=0 → student j) on PG19
