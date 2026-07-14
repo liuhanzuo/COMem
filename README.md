@@ -59,18 +59,20 @@ answer = model.generate("What is X?",           # retrieve topk → resume → d
                         selector="bm25", topk=12, max_new_tokens=32)
 ```
 
-- `selector`: `iter_bm25_adaptive` (**default for RULER — the single universal
-  selector for all tasks**: it self-degrades via a confidence stop
-  (`--iter_conf_ratio`), so chain-free tasks (`niah_*`) stop after round 1
-  (== single-shot `bm25`) while chain tasks (`variable_tracking`) keep following
-  the VAR reference chain — one command scores every task correctly with no
-  per-task branching; pass an explicit `--selector` to override it on ALL tasks
-  for controls), `bm25` (lexical), `reader_attn` (cosine over `h_j`), `iter_bm25` /
+- `selector`: `auto` (**default for RULER — data-validated per-task routing**
+  (8B RULER n=500): `variable_tracking` → **fixed `iter_bm25`** (multi-hop BFS on
+  the literal VAR chain, `iter_hop_topk=4`), all `niah_*` → **`bm25`** (single-shot
+  lexical). This replaces the old single universal `iter_bm25_adaptive` default,
+  whose confidence early-stop collapsed the VT chain (31/25/22 vs `iter_bm25`
+  97/97/98 on 8k/16k/32k) and hurt `niah_multikey` (91/70/32 vs `bm25` 91/91/92);
+  pass an explicit `--selector` to override it on ALL tasks for controls), `bm25`
+  (lexical), `reader_attn` (cosine over `h_j`), `iter_bm25` /
   `iter_reader_attn` (multi-hop BFS for reference chains, e.g. RULER variable
   tracking), `iter_bm25_adaptive` (confidence-adaptive `iter_bm25`: no fixed
   `topk` budget — walk the chain until a hop's best score drops below
-  `--iter_conf_ratio`× the round-1 best or `--iter_max_chunks` is hit, so short
-  chains don't hard-fill low-score noise chunks), `recency`, `oracle`.
+  `--iter_conf_ratio`× the round-1 best or `--iter_max_chunks` is hit; **kept as
+  an opt-in selector for ρ-tuning experiments, no longer the default**),
+  `recency`, `oracle`.
 - `mode`: `comem` (retrieval, fixed read; default), `kvdirect` / `hcache`
   (no-retrieval baselines that pack **all** chunks — read grows O(context); build
   `CoMem(resume_j=0)` for a faithful `kvdirect`).
@@ -156,7 +158,7 @@ formula with a warning.
 
 ```bash
 # RULER   (NIAH + variable-tracking; synthetic length sweep)
-# --selector defaults to `iter_bm25_adaptive` (universal, all tasks): confidence stop auto-degrades to bm25 on niah_*, follows the chain on vt
+# --selector defaults to `auto` (per-task routing): vt -> fixed iter_bm25, niah_* -> bm25 (data-validated on 8B RULER n=500)
 python -m eval.run --benchmark ruler --model /path/to/Qwen3-8B --j auto \
     --lengths 8k,16k,32k,64k,128k --n 100 --out ruler_results/qwen3_8b
 

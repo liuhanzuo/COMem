@@ -269,6 +269,22 @@ def _resolve_task(name):
     raise ValueError(f"unknown ruler task {name!r}")
 
 
+def _resolve_selector(selector, task):
+    """Map --selector to the concrete per-task selector.
+
+    Default sentinel 'auto' = data-validated per-task routing (8B RULER n=500):
+    variable_tracking -> FIXED 'iter_bm25' (multi-hop BFS on the literal VAR
+    chain; adaptive's confidence early-stop collapsed the chain -> 31/25/22 vs
+    iter_bm25 97/97/98 on 8k/16k/32k), all niah_* -> 'bm25' (adaptive 91/70/32
+    vs bm25 91/91/92 on niah_multikey). Explicit --selector X overrides and
+    applies X to ALL tasks (controls)."""
+    if selector != "auto":
+        return selector
+    if task == "variable_tracking":
+        return "iter_bm25"
+    return "bm25"
+
+
 def main():
     global _ESSAY_PATH
     p = argparse.ArgumentParser(description="CoMem RULER eval")
@@ -279,17 +295,20 @@ def main():
     p.add_argument("--reuse_kv_blockdiag", action="store_true", default=False)
     p.add_argument("--adapter", "--lora_adapter", dest="lora_adapter", default="")
     p.add_argument("--baseline", default="none", choices=_cli.BASELINE_CHOICES)
-    p.add_argument("--selector", default="iter_bm25_adaptive",
-                   choices=["bm25", "recency", "oracle", "reader_attn",
+    p.add_argument("--selector", default="auto",
+                   choices=["auto", "bm25", "recency", "oracle", "reader_attn",
                             "iter_reader_attn", "iter_bm25", "iter_bm25_adaptive"],
-                   help="Chunk selector. Default 'iter_bm25_adaptive' is the "
-                        "single universal selector for ALL tasks: it self-degrades "
-                        "via a confidence stop (--iter_conf_ratio) so chain-free "
-                        "tasks (niah_*) stop after round 1 (== single-shot bm25) "
-                        "while chain tasks (variable_tracking) keep following the "
-                        "VAR reference chain. Pass an explicit --selector "
-                        "(bm25 / iter_bm25 / reader_attn / oracle / ...) to "
-                        "override it on ALL tasks for controls.")
+                   help="Chunk selector. Default 'auto' is the DATA-VALIDATED "
+                        "per-task routing (8B RULER n=500): variable_tracking -> "
+                        "FIXED 'iter_bm25' (multi-hop BFS on the literal VAR chain, "
+                        "iter_hop_topk=4), all niah_* -> 'bm25' (single-shot). This "
+                        "replaces the old single universal 'iter_bm25_adaptive' "
+                        "default, whose confidence early-stop killed the VT chain "
+                        "(31/25/22 vs iter_bm25 97/97/98 on 8k/16k/32k) and hurt "
+                        "niah_multikey (91/70/32 vs bm25 91/91/92). Pass an explicit "
+                        "--selector (bm25 / iter_bm25 / iter_bm25_adaptive / "
+                        "reader_attn / oracle / ...) to override on ALL tasks for "
+                        "controls.")
     p.add_argument("--iter_rounds", type=int, default=0)
     p.add_argument("--iter_hop_topk", type=int, default=4)
     p.add_argument("--iter_score", default="meanpool", choices=["meanpool", "maxsim"])
@@ -338,7 +357,7 @@ def main():
     summary = {}
     for task in tqdm(tasks, desc="tasks"):
         summary[task] = {}
-        sel = args.selector
+        sel = _resolve_selector(args.selector, task)
         for length in tqdm(args.lengths, desc="lengths", leave=False):
             if length not in _LENGTH_TOKENS:
                 continue
