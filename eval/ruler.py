@@ -269,6 +269,16 @@ def _resolve_task(name):
     raise ValueError(f"unknown ruler task {name!r}")
 
 
+def _resolve_selector(cli_selector, task):
+    """Per-task selector routing. When the user leaves ``--selector auto``
+    (the default), variable_tracking (a multi-hop VAR chain) uses
+    ``iter_bm25_adaptive`` and every niah_* task uses ``bm25``. Any explicit
+    ``--selector X`` overrides auto and is applied to every task."""
+    if cli_selector != "auto":
+        return cli_selector
+    return "iter_bm25_adaptive" if task == "variable_tracking" else "bm25"
+
+
 def main():
     global _ESSAY_PATH
     p = argparse.ArgumentParser(description="CoMem RULER eval")
@@ -279,9 +289,13 @@ def main():
     p.add_argument("--reuse_kv_blockdiag", action="store_true", default=False)
     p.add_argument("--adapter", "--lora_adapter", dest="lora_adapter", default="")
     p.add_argument("--baseline", default="none", choices=_cli.BASELINE_CHOICES)
-    p.add_argument("--selector", default="bm25",
-                   choices=["bm25", "recency", "oracle", "reader_attn",
-                            "iter_reader_attn", "iter_bm25", "iter_bm25_adaptive"])
+    p.add_argument("--selector", default="auto",
+                   choices=["auto", "bm25", "recency", "oracle", "reader_attn",
+                            "iter_reader_attn", "iter_bm25", "iter_bm25_adaptive"],
+                   help="Chunk selector. Default 'auto' picks per-task: "
+                        "variable_tracking (multi-hop chain) -> iter_bm25_adaptive, "
+                        "every niah_* -> bm25. Passing any explicit selector "
+                        "overrides auto and applies it to ALL tasks.")
     p.add_argument("--iter_rounds", type=int, default=0)
     p.add_argument("--iter_hop_topk", type=int, default=2)
     p.add_argument("--iter_score", default="meanpool", choices=["meanpool", "maxsim"])
@@ -330,10 +344,13 @@ def main():
     summary = {}
     for task in tqdm(tasks, desc="tasks"):
         summary[task] = {}
+        sel = _resolve_selector(args.selector, task)
         for length in tqdm(args.lengths, desc="lengths", leave=False):
             if length not in _LENGTH_TOKENS:
                 continue
             target = _LENGTH_TOKENS[length]
+            print(f"[CoMem-RULER] {task}/{length}: selector={sel}"
+                  f"{' (auto)' if args.selector == 'auto' else ''}")
             base_seed = args.seed + (hash((task, length)) % 100000)
             vt_icl = _make_vt_icl(random.Random(base_seed + 777), 4) \
                 if task == "variable_tracking" else None
@@ -355,7 +372,7 @@ def main():
                 input_ids = ids.to(device)
                 bare_q_ids = tok.encode(_bare_question(prompt), add_special_tokens=False)
                 needle_set = None
-                if args.selector == "oracle" and gold:
+                if sel == "oracle" and gold:
                     needle_set = _sel.locate_needle_chunks(
                         input_ids, gold, tok, args.chunk_size)
                 try:
@@ -365,7 +382,7 @@ def main():
                     else:
                         out = cm.generate_from_ids(
                             input_ids, chunk_size=args.chunk_size, max_new_tokens=mnt,
-                            selector=args.selector, topk=args.topk,
+                            selector=sel, topk=args.topk,
                             sink_tokens=args.sink_tokens, needle_chunk_set=needle_set,
                             bare_question_ids=bare_q_ids, no_retrieval=no_retrieval,
                             iter_rounds=args.iter_rounds, iter_hop_topk=args.iter_hop_topk,

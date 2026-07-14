@@ -59,7 +59,10 @@ answer = model.generate("What is X?",           # retrieve topk → resume → d
                         selector="bm25", topk=12, max_new_tokens=32)
 ```
 
-- `selector`: `bm25` (lexical), `reader_attn` (cosine over `h_j`), `iter_bm25` /
+- `selector`: `auto` (**default for RULER**: picks per-task — `variable_tracking`
+  → `iter_bm25_adaptive`, every `niah_*` → `bm25` — so one command scores every
+  task correctly; passing any explicit selector overrides auto and applies it to
+  all tasks), `bm25` (lexical), `reader_attn` (cosine over `h_j`), `iter_bm25` /
   `iter_reader_attn` (multi-hop BFS for reference chains, e.g. RULER variable
   tracking), `iter_bm25_adaptive` (confidence-adaptive `iter_bm25`: no fixed
   `topk` budget — walk the chain until a hop's best score drops below
@@ -150,8 +153,9 @@ formula with a warning.
 
 ```bash
 # RULER   (NIAH + variable-tracking; synthetic length sweep)
+# --selector defaults to `auto`: vt -> iter_bm25_adaptive, niah_* -> bm25 (one command, all tasks correct)
 python -m eval.run --benchmark ruler --model /path/to/Qwen3-8B --j auto \
-    --lengths 8k,16k,32k,64k,128k --n 100 --selector bm25 --out ruler_results/qwen3_8b
+    --lengths 8k,16k,32k,64k,128k --n 100 --out ruler_results/qwen3_8b
 
 # BABILong (qa1..qa10 x lengths; needs `pip install babilong`)
 python -m eval.run --benchmark babilong --model /path/to/Llama-3-8B --j auto \
