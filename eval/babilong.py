@@ -122,7 +122,7 @@ def main():
     p.add_argument("--lengths", nargs="+", default=["0k", "1k", "2k", "4k", "8k", "16k"])
     p.add_argument("--chunk_size", type=int, default=512)
     p.add_argument("--max_new_tokens", type=int, default=20)
-    p.add_argument("--limit", "--n", dest="limit", type=int, default=100)
+    p.add_argument("--limit", "--n", dest="limit", type=int, default=500)  # paper default n=500/cell
     p.add_argument("--num_shards", type=int, default=1)
     p.add_argument("--shard_index", type=int, default=0)
     p.add_argument("--device", default="cuda:0")

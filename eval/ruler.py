@@ -289,7 +289,7 @@ def main():
     p.add_argument("--sink_tokens", default="bos", choices=["bos", "none"])
     p.add_argument("--chunk_size", type=int, default=512)
     p.add_argument("--max_new_tokens", type=int, default=48)
-    p.add_argument("--limit", "--n", dest="limit", type=int, default=50)
+    p.add_argument("--limit", "--n", dest="limit", type=int, default=500)  # paper default n=500/cell (aligns with official RULER)
     p.add_argument("--num_shards", type=int, default=1)
     p.add_argument("--shard_index", type=int, default=0)
     p.add_argument("--ruler_tasks", nargs="+", default=["niah_single", "niah_multi", "vt"])
