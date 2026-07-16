@@ -1,0 +1,60 @@
+% Full-scale dual-j RULER main table (Qwen3 family). n=100, chunk 512,
+% string_match; selector bm25 (var-track: iter_bm25). Zero-shot rows use the
+% per-model readout-safe split j (deepest j with single-recall >=90, which
+% deepens with scale); +adapter rows use the split noted in the config column.
+% Numbers from status/QCMEM_BENCHMARK_PLAN.md sect.1 (dual-j main table) and
+% sect.1a (vs-Dense 128k super-window). Distinct from the main 8B j=12 setting.
+\begin{table*}[t]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}llcccccccccc@{}}
+\toprule
+\textbf{Model} & \textbf{Config} & \multicolumn{3}{c}{\textbf{niah\_single}} & \multicolumn{3}{c}{\textbf{niah\_multikey}} & \multicolumn{3}{c}{\textbf{var-track}} & \textbf{Dense$\to$CoMem} \\
+\cmidrule(lr){3-5}\cmidrule(lr){6-8}\cmidrule(lr){9-11}\cmidrule(lr){12-12}
+ & & 8k & 16k & 32k & 8k & 16k & 32k & 8k & 16k & 32k & 128k single \\
+\midrule
+\multirow{2}{*}{0.6B}
+  & zero-shot @ $j{=}2$ ($0.07L$)  & 100 & 100 & 100 & 77 & 89 & 79 & 58 & 67 & 79 & 0\,$\to$\,\textbf{56} \\
+  & +adapter @ $j{=}13$ ($0.48L$)  & \multicolumn{10}{c}{\emph{content-$j$ adapter: training in progress}} \\
+\midrule
+\multirow{2}{*}{1.7B}
+  & zero-shot @ $j{=}3$ ($0.11L$)  & 97 & 100 & 100 & 53 & 40 & 33 & 53 & 64 & 60 & 0\,$\to$\,\textbf{83} \\
+  & +adapter @ $j{\approx}9$ ($0.33L$)  & --- & --- & --- & 56 & 39 & 20 & 62 & 62 & 66 & --- \\
+\midrule
+\multirow{2}{*}{4B}
+  & zero-shot @ $j{=}9$ ($0.25L$)  & 93 & 98 & 94 & 38 & 35 & 41 & 58 & 61 & 54 & 0\,$\to$\,\textbf{99} \\
+  & +adapter @ $j{\approx}12$ ($0.33L$) & --- & --- & --- & \textbf{95} & \textbf{97} & \textbf{94} & \textbf{96} & \textbf{96} & \textbf{97} & --- \\
+\midrule
+\multirow{2}{*}{8B}
+  & zero-shot @ $j{=}9$ ($0.25L$)  & 100 & 97 & 99 & 42 & 36 & 31 & 46 & 42 & 39 & 0\,$\to$\,\textbf{100} \\
+  & +adapter @ $j{=}12$ ($0.33L$)  & 100 & 100 & 100 & \textbf{91} & \textbf{91} & \textbf{92} & \textbf{97} & \textbf{97} & \textbf{98} & --- \\
+\midrule
+\multirow{2}{*}{14B}
+  & zero-shot @ $j{=}13$ ($0.325L$) & 99 & 89 & 98 & 51 & 51 & 11 & 18 & 15 & 11 & 11\,$\to$\,\textbf{100} \\
+  & +adapter @ $j{\approx}13$ ($0.325L$) & 100 & 100 & 100 & \textbf{100} & \textbf{99} & \textbf{99} & \textbf{99} & \textbf{100} & \textbf{100} & --- \\
+\midrule
+\multirow{2}{*}{32B}
+  & zero-shot @ $j{=}27$ ($0.42L$) & 100 & 100 & 100 & 98 & 88 & 86 & 42 & 33 & 37 & OOM\,$\to$\,\textbf{100} \\
+  & +adapter                        & \multicolumn{10}{c}{\emph{not needed (gap $\approx$0; zero-shot readout already reaches the content peak)}} \\
+\bottomrule
+\end{tabular}%
+}
+\caption{\textbf{Full-scale dual-$j$ RULER}, Qwen3 family ($n{=}100$, chunk 512,
+official \texttt{string\_match}, selector BM25; var-track uses \texttt{iter\_bm25}).
+Each backbone reports two rows. \emph{Zero-shot} uses the per-model
+\emph{readout-safe} split (deepest $j$ whose single recall stays $\ge$90); this
+readable depth \emph{deepens with scale} ($0.07L$ at 0.6B $\to$ $0.42L$ at 32B).
+\emph{+adapter} uses the split noted in the config column (a self-distilled LoRA
+on \texttt{layers[$j$:]}). \textbf{Dense$\to$CoMem} is the 128k
+\texttt{niah\_single} super-window point: the full-context Dense reference
+collapses (0, or OOM once its packed length exceeds the native window) while
+CoMem survives at a constant $\approx$6.7k read---at \emph{every} scale (multikey
+is same-signed, e.g.\ 14B $5{\to}98$, 32B OOM$\to$98). Single recall is depth-robust,
+so the zero-shot adapter gain concentrates on the harder multikey / var-track
+tasks and grows with scale as the readout gap closes (Table~\ref{tab:depth}).
+This grid extends---and does not overwrite---the main 8B $j{=}12$ setting used
+elsewhere in this section.}
+\label{tab:scale}
+\end{table*}

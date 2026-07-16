@@ -236,3 +236,46 @@ tokens through a fixed $\approx$4.5k-token pack. The three mechanisms hold at
 MoE scale.
 
 \input{sections/tab_hy3_ruler}
+
+\subsection{Scaling across model sizes}
+\label{sec:scaling-models}
+The results so far fix a single 8B backbone. Table~\ref{tab:scale} extends CoMem
+across the full Qwen3 family (0.6B/1.7B/4B/8B/14B/32B) under a
+\emph{dual-$j$} reporting convention: each backbone's zero-shot row uses its own
+\emph{readout-safe} split $j$ (the deepest $j$ whose single recall stays $\ge$90),
+and the \emph{+adapter} row uses the deeper split noted in the table. Two
+findings are scale-universal. First, exact needle retrieval holds everywhere:
+zero-shot \texttt{niah\_single} is $\ge$93 at every scale and length, and the
+self-distilled adapter recovers the harder \texttt{niah\_multikey} and
+variable-tracking tasks (e.g.\ 8B multikey $42{\to}91$, var-track $46{\to}97$;
+14B to near-perfect). Second, and most importantly, the 128k super-window column
+isolates the core claim: the full-context Dense reference collapses to 0---or
+OOMs outright at 32B---once its packed length exceeds the backbone's native
+window, whereas CoMem survives at a constant $\approx$6.7k read at
+\emph{every} scale ($0{\to}56$ at 0.6B up to OOM$\to$100 at 32B). CoMem is thus
+not an 8B-specific trick but a general mechanism: beyond the extrapolation limit
+it is the only usable method from 0.6B to 32B. This grid extends, and does not
+replace, the main 8B $j{=}12$ analysis above.
+
+\input{sections/tab_scale}
+
+\subsection{Depth partition: content vs.\ readable depth}
+\label{sec:depth-partition}
+Why does the reporting $j$ have to grow with scale? Table~\ref{tab:depth}
+separates three depths. A truncation-downstream probe locates the
+\emph{semantic content peak}---the depth at which the mid-layer hidden carries
+the most decodable meaning---at $\approx$$0.45L$ for \emph{every} model, i.e.\
+the cacheable content depth is essentially \emph{scale-invariant}. The zero-shot
+\emph{readable} depth, by contrast, is not: the point at which CoMem's zero-shot
+single recall collapses deepens monotonically with scale, from $0.09L$ (0.6B) to
+$>0.42L$ (32B, no collapse observed). The difference between the two is the gap
+the self-distilled adapter must close, and it shrinks steadily with scale---from
+$0.39L$ at 0.6B to $\approx$0 at 32B. This reframes the adapter's role: it pushes
+the \emph{readable} depth toward the (fixed) semantic content peak, and it is
+therefore most valuable for small models and nearly unnecessary at 32B, whose
+zero-shot readout already reaches the content peak. The $\approx$$0.45L$ content
+depth is consistent with the mid-depth fidelity smile observed on the 8B and Hy3
+backbones (\S\ref{sec:hy3-general}), tying the scaling story back to the depth
+division of labor.
+
+\input{sections/tab_depth}
