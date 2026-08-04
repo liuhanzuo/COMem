@@ -5,6 +5,11 @@
 *.ckpt
 
 # data / results / outputs
+# NOTE: the glob is load-bearing. This repo is CODE-ONLY — result JSON/CSV must
+# never enter git. `*_results/` catches new benchmark dirs (bench_results/,
+# infbench_results/, ...) that the literal list below would otherwise miss and
+# that could be `git add`-ed by accident.
+*_results/
 data/
 outputs/
 ruler_results/
@@ -12,6 +17,7 @@ babilong_results/
 longbench_results/
 longeval_results/
 locomo_results/
+bench_qcmem_vs_dense_result.txt
 
 # secrets / credentials
 configs/password*
