@@ -21,6 +21,17 @@ Gates (all must pass; fp32, tolerance 1e-4):
 
   (D) resumed-band KV-cache decode == recompute decode, token-for-token (same
       generated ids, max|logit diff| < tol). Speed must not change the output.
+
+  (E) the external BASELINE gates, so one command covers the whole repo:
+      * ``comem.cacheblend`` — RoPE reindex exact, ``r=1.0`` == full prefill,
+        ``r=0.0`` finite (see :func:`comem.cacheblend.run_self_test`);
+      * ``comem.kvcompress`` — SnapKV / PyramidKV do not perturb the model when
+        no compression fires, and honour their retained-KV budget
+        (see :func:`comem.kvcompress.run_self_test`).
+
+  (F) the ``dense_bge`` selector's plumbing without touching the network: a stub
+      retriever exercises the dispatch, the deterministic ``(-score, idx)``
+      tie-break, and the fail-closed guard when no retriever is supplied.
 """
 from __future__ import annotations
 
@@ -60,6 +71,28 @@ class _TinyTok:
 
     def decode(self, ids, skip_special_tokens=True):
         return " ".join(str(int(i)) for i in ids)
+
+
+class _StubBGERetriever:
+    """Offline stand-in for :class:`comem.selectors.DenseBGERetriever`.
+
+    Exposes the same ``scores(context_texts, query_text)`` contract with a
+    deterministic, weight-free score (normalised character-bigram overlap), so the
+    ``dense_bge`` dispatch / detokenisation / tie-break can be gated on CPU with
+    no network and no BGE checkpoint. The real retriever's numerics are validated
+    separately against the frozen checkpoint."""
+
+    @staticmethod
+    def _bigrams(text):
+        return {text[i:i + 2] for i in range(max(0, len(text) - 1))}
+
+    def scores(self, context_texts, query_text):
+        q = self._bigrams(query_text or "")
+        out = []
+        for t in context_texts:
+            c = self._bigrams(t)
+            out.append(len(q & c) / (len(q | c) or 1))
+        return out
 
 
 @torch.no_grad()
@@ -143,10 +176,44 @@ def run(n_layers=6, hidden=64, vocab=256, chunk_size=8, tol=1e-4, verbose=True):
     kv_md = max((st_kv["step_logits"][s] - st_rc["step_logits"][s]).abs().max().item()
                 for s in range(nkv)) if nkv else 0.0
 
+    # ---- (F) dense_bge selector plumbing (stub retriever, no network) ----
+    from . import selectors as _sel
+    stub = _StubBGERetriever()
+    ctx_chunks = [torch.tensor(list(range(10, 10 + chunk_size))),   # unrelated
+                  torch.tensor(query_list),                        # == the query
+                  torch.tensor(list(range(90, 90 + chunk_size)))]  # unrelated
+    dense_sel = _sel.select_context_chunk_indices(
+        "dense_bge", ctx_chunks, query_list, 1,
+        dense_retriever=stub, dense_tokenizer=tok)
+    dense_hits_query_chunk = (dense_sel == [1])          # the query chunk wins
+    # topk == n_ctx must return every chunk exactly once, in doc order
+    dense_all = _sel.select_context_chunk_indices(
+        "dense_bge", ctx_chunks, query_list, len(ctx_chunks),
+        dense_retriever=stub, dense_tokenizer=tok)
+    dense_full_ok = (dense_all == [0, 1, 2])
+    try:                                                  # fail-closed guard
+        _sel.select_context_chunk_indices("dense_bge", ctx_chunks, query_list, 1)
+        dense_guard_ok = False
+    except ValueError:
+        dense_guard_ok = True
+    dense_ok = dense_hits_query_chunk and dense_full_ok and dense_guard_ok
+    # end-to-end through the model entry point (exercises model.py's wiring)
+    _ = qc.generate_from_ids(
+        full_ids, chunk_size=chunk_size, max_new_tokens=4, selector="dense_bge",
+        topk=3, sink_tokens="bos", bare_question_ids=query_list,
+        dense_retriever=stub, tokenizer=tok)
+
+    # ---- (E) external baseline gates ----
+    from . import cacheblend as _cb
+    from . import kvcompress as _kvc
+    cb_ok = _cb.run_self_test(tol=tol, verbose=False)
+    kvc_ok = _kvc.run_self_test(tol=tol, verbose=False)
+
     ok = (diff_pack < tol and diff_resume < tol
           and all(d < tol for d in diffs_j.values())
           and all(t and (m < tol) for t, m in c_results.values())
-          and kv_tok_ok and (kv_md < tol))
+          and kv_tok_ok and (kv_md < tol)
+          and dense_ok and cb_ok and kvc_ok)
 
     if verbose:
         print("=" * 72)
@@ -166,6 +233,17 @@ def run(n_layers=6, hidden=64, vocab=256, chunk_size=8, tol=1e-4, verbose=True):
         print(f"  (D) kv-cache decode == recompute decode    : "
               f"tokens={'OK' if kv_tok_ok else 'MISMATCH'} maxdiff={kv_md:.3e}  "
               f"{'PASS' if (kv_tok_ok and kv_md < tol) else 'FAIL'}")
+        print(f"  (E) baseline cacheblend (reindex/r=1/r=0)  : "
+              f"{'PASS' if cb_ok else 'FAIL'}   "
+              f"[python -m comem.cacheblend for detail]")
+        print(f"  (E) baseline snapkv+pyramidkv (stock/budget): "
+              f"{'PASS' if kvc_ok else 'FAIL'}   "
+              f"[python -m comem.kvcompress for detail]")
+        print(f"  (F) selector dense_bge dispatch/tie-break  : "
+              f"top1={'OK' if dense_hits_query_chunk else 'WRONG'} "
+              f"full={'OK' if dense_full_ok else 'WRONG'} "
+              f"guard={'OK' if dense_guard_ok else 'MISSING'}  "
+              f"{'PASS' if dense_ok else 'FAIL'}")
         print("-" * 72)
         print(f"SELF-TEST: {'ALL PASS' if ok else 'FAILURE'}")
         print("=" * 72)

@@ -38,7 +38,8 @@ from comem import CoMem                          # noqa: E402
 from comem import selectors as _sel              # noqa: E402
 from eval import _cli                            # noqa: E402
 from eval._common import (load_backbone, resolve_baseline, write_results_csv,  # noqa: E402
-                          dense_generate, DENSE_MODES)
+                          dense_generate, resolve_reader, install_baseline,
+                          resolve_dense_retriever, FULL_MODEL_MODES)
 
 # --------------------------------------------------------------------------- #
 # RULER constants (verbatim from NVIDIA/RULER data/synthetic/constants.py)
@@ -296,8 +297,7 @@ def main():
     p.add_argument("--adapter", "--lora_adapter", dest="lora_adapter", default="")
     p.add_argument("--baseline", default="none", choices=_cli.BASELINE_CHOICES)
     p.add_argument("--selector", default="auto",
-                   choices=["auto", "bm25", "recency", "oracle", "reader_attn",
-                            "iter_reader_attn", "iter_bm25", "iter_bm25_adaptive"],
+                   choices=["auto"] + _cli.SELECTOR_CHOICES,
                    help="Chunk selector. Default 'auto' is the DATA-VALIDATED "
                         "per-task routing (8B RULER n=500): variable_tracking -> "
                         "FIXED 'iter_bm25' (multi-hop BFS on the literal VAR chain, "
@@ -307,8 +307,9 @@ def main():
                         "(31/25/22 vs iter_bm25 97/97/98 on 8k/16k/32k) and hurt "
                         "niah_multikey (91/70/32 vs bm25 91/91/92). Pass an explicit "
                         "--selector (bm25 / iter_bm25 / iter_bm25_adaptive / "
-                        "reader_attn / oracle / ...) to override on ALL tasks for "
-                        "controls.")
+                        "reader_attn / dense_bge / oracle / ...) to override on ALL "
+                        "tasks for controls.")
+    _cli.add_baseline_args(p)
     p.add_argument("--iter_rounds", type=int, default=0)
     p.add_argument("--iter_hop_topk", type=int, default=4)
     p.add_argument("--iter_score", default="meanpool", choices=["meanpool", "maxsim"])
@@ -340,14 +341,18 @@ def main():
     _ESSAY_PATH = args.essay_path
     resume_j, no_retrieval, mode, lora = resolve_baseline(
         args.baseline, args.resume_j, args.lora_adapter)
-    dense_mode = mode if mode in DENSE_MODES else None
+    dense_mode = mode if mode in FULL_MODEL_MODES else None
     tasks = [_resolve_task(t) for t in args.ruler_tasks]
 
     model, tok = load_backbone(args.model_path, args.dtype, args.attn_impl,
                                args.device, lora)
     L = int(model.config.num_hidden_layers)
+    install_baseline(model, mode, args.kv_budget, args.kv_window)
     cm = CoMem(model, resume_j=resume_j, top_prepay_b=args.top_prepay_b,
                block_diagonal=args.reuse_kv_blockdiag, tokenizer=tok)
+    reader = resolve_reader(cm, mode, args.recompute_ratio)
+    retriever = resolve_dense_retriever(args.selector, args.retriever_path,
+                                        args.device, args.dtype)
     device = torch.device(args.device)
 
     outdir = Path(args.output_dir)
@@ -392,7 +397,7 @@ def main():
                         out = dense_generate(cm.model, tok, input_ids, dense_mode,
                                              max_new_tokens=mnt)
                     else:
-                        out = cm.generate_from_ids(
+                        out = reader.generate_from_ids(
                             input_ids, chunk_size=args.chunk_size, max_new_tokens=mnt,
                             selector=sel, topk=args.topk,
                             sink_tokens=args.sink_tokens, needle_chunk_set=needle_set,
@@ -400,7 +405,8 @@ def main():
                             iter_rounds=args.iter_rounds, iter_hop_topk=args.iter_hop_topk,
                             iter_score=args.iter_score,
                             iter_conf_ratio=args.iter_conf_ratio,
-                            iter_max_chunks=args.iter_max_chunks)
+                            iter_max_chunks=args.iter_max_chunks,
+                            dense_retriever=retriever)
                 except RuntimeError as e:
                     if "out of memory" not in str(e).lower():
                         raise

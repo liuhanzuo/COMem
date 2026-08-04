@@ -32,7 +32,8 @@ from comem import CoMem                          # noqa: E402
 from comem import selectors as _sel              # noqa: E402
 from eval import _cli                            # noqa: E402
 from eval._common import (load_backbone, resolve_baseline,  # noqa: E402
-                          dense_generate, DENSE_MODES)
+                          dense_generate, resolve_reader, install_baseline,
+                          resolve_dense_retriever, FULL_MODEL_MODES)
 
 CATEGORY_NAMES = {1: "multi_hop", 2: "single_hop", 3: "temporal",
                   4: "open_domain", 5: "adversarial"}
@@ -248,8 +249,8 @@ def main():
     p.add_argument("--reuse_kv_blockdiag", action="store_true", default=False)
     p.add_argument("--adapter", "--lora_adapter", dest="lora_adapter", default="")
     p.add_argument("--baseline", default="none", choices=_cli.BASELINE_CHOICES)
-    p.add_argument("--selector", default="bm25",
-                   choices=["bm25", "recency", "oracle", "reader_attn"])
+    p.add_argument("--selector", default="bm25", choices=_cli.SELECTOR_CHOICES)
+    _cli.add_baseline_args(p)
     p.add_argument("--topk", type=int, default=12)
     p.add_argument("--sink_tokens", default="bos", choices=["bos", "none"])
     p.add_argument("--chunk_size", type=int, default=512)
@@ -273,12 +274,16 @@ def main():
     _cli.normalize_args(args)
     resume_j, no_retrieval, mode, lora = resolve_baseline(
         args.baseline, args.resume_j, args.lora_adapter)
-    dense_mode = mode if mode in DENSE_MODES else None
+    dense_mode = mode if mode in FULL_MODEL_MODES else None
     data_path = args.locomo_data
     model, tok = load_backbone(args.model_path, args.dtype, args.attn_impl,
                                args.device, lora)
+    install_baseline(model, mode, args.kv_budget, args.kv_window)
     cm = CoMem(model, resume_j=resume_j, top_prepay_b=args.top_prepay_b,
                block_diagonal=args.reuse_kv_blockdiag, tokenizer=tok)
+    reader = resolve_reader(cm, mode, args.recompute_ratio)
+    retriever = resolve_dense_retriever(args.selector, args.retriever_path,
+                                        args.device, args.dtype)
     device = torch.device(args.device)
 
     categories = None
@@ -312,12 +317,12 @@ def main():
                 pred = dense_generate(cm.model, tok, input_ids, dense_mode,
                                       max_new_tokens=args.max_new_tokens)
             else:
-                pred = cm.generate_from_ids(
+                pred = reader.generate_from_ids(
                     input_ids, chunk_size=args.chunk_size,
                     max_new_tokens=args.max_new_tokens, selector=args.selector,
                     topk=args.topk, sink_tokens=args.sink_tokens,
                     needle_chunk_set=needle_set, bare_question_ids=bare_q_ids,
-                    no_retrieval=no_retrieval)
+                    no_retrieval=no_retrieval, dense_retriever=retriever)
         except RuntimeError as e:
             if "out of memory" not in str(e).lower():
                 raise

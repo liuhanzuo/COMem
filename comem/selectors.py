@@ -2,16 +2,25 @@
 
 Given a set of context chunks (each cached as a depth-``j`` hidden ``h_j`` plus
 its raw token ids) and a query, a *selector* returns the ordered indices of the
-``topk`` chunks to pack into the read. Every selector here is FORWARD-FREE beyond
-the bottom-``j`` writes CoMem already performs: they consume only the cached
-``h_j`` tensors and/or the raw token ids, so retrieval adds no extra model
-forward and CoMem's compute saving is preserved.
+``topk`` chunks to pack into the read. Every selector here EXCEPT ``dense_bge``
+is FORWARD-FREE beyond the bottom-``j`` writes CoMem already performs: they
+consume only the cached ``h_j`` tensors and/or the raw token ids, so retrieval
+adds no extra model forward and CoMem's compute saving is preserved.
+``dense_bge`` is the deliberate exception (a small FROZEN external sentence
+encoder), so its retrieval latency / index size are reported separately.
 
 Selectors
 ---------
 * ``recency``          — the last ``topk`` context chunks (positional).
 * ``bm25``             — highest lexical BM25 overlap with the bare question
                          (pure CPU; IDF over the candidate pool).
+* ``dense_bge``        — highest cosine between a FROZEN BGE sentence embedding
+                         of the query and of each chunk's decoded text (CLS
+                         pooling + L2 norm + cosine == dot). The single-variable
+                         "dense retrieval instead of lexical BM25" arm; needs a
+                         :class:`DenseBGERetriever` (``dense_retriever=``) and a
+                         backbone tokenizer (``dense_tokenizer=``) to detokenise
+                         the chunks back to text.
 * ``iter_bm25``        — multi-hop BFS BM25: round 1 == single-shot ``bm25``,
                          later rounds re-query with the previous picks' token
                          text to walk a lexical reference chain (RULER vt).
@@ -34,9 +43,11 @@ without importing anything outside ``comem``.
 
 All primitives are lifted verbatim (formulae + defaults) from the QCMem research
 code: the BM25 scorer (``k1=1.5``, ``b=0.75``) and the needle locator match the
-original ``run_babilong_mem_space`` helpers, and the reader-attn / iterative
-selectors match ``eval_qcmem_babilong`` — so CoMem reproduces the published
-retrieval rankings bit-for-bit.
+original ``run_babilong_mem_space`` helpers, the reader-attn / iterative
+selectors match ``eval_qcmem_babilong``, and ``dense_bge`` ports the frozen
+BGE-large-en-v1.5 retriever (CLS + L2 + cosine, official query instruction,
+stable ``(-score, idx)`` tie-break) from ``eval_p1_9_dense_rag.DenseRetriever``
+— so CoMem reproduces the published retrieval rankings bit-for-bit.
 """
 from __future__ import annotations
 
@@ -88,6 +99,126 @@ def bm25_scores(docs, query_ids, k1: float = 1.5, b: float = 0.75):
             s += it * (f * (k1 + 1.0)) / denom
         scores.append(s)
     return scores
+
+
+# --------------------------------------------------------------------------- #
+# dense_bge: frozen BGE sentence-embedding cosine over the chunks' decoded text
+# --------------------------------------------------------------------------- #
+# Official BGE query instruction (BAAI/bge-*-en-v1.5 model card): passages are
+# encoded RAW, only the query gets the instruction prefix.
+BGE_QUERY_INSTRUCTION = "Represent this sentence for searching relevant passages:"
+
+
+class DenseBGERetriever:
+    """Frozen BGE sentence encoder (``BAAI/bge-large-en-v1.5`` and friends).
+
+    CLS pooling, L2 normalisation, cosine similarity (== dot after the norm).
+    Passages are encoded WITHOUT the instruction, the query WITH the official
+    ``BGE_QUERY_INSTRUCTION``; both are truncated to the encoder's 512-token
+    position budget (standard dense-RAG behaviour). Held frozen and used
+    read-only — this is a RETRIEVER, not part of the CoMem backbone.
+
+    The encoder is loaded lazily on first use so constructing the object (e.g.
+    from an eval driver's argparse) never touches the disk.
+
+    Parameters
+    ----------
+    retriever_path:
+        Local HF directory of the BGE checkpoint (loaded ``local_files_only``).
+    device / dtype:
+        Where/how to run the encoder. Defaults to the CoMem eval convention
+        (``cuda:0`` + ``bfloat16``); pass ``float32`` for a deterministic CPU run.
+    batch_size:
+        Chunk-encoding batch size (chunks are ~512 backbone tokens each).
+    """
+
+    def __init__(self, retriever_path, device="cuda:0", dtype=torch.bfloat16,
+                 batch_size: int = 64):
+        self.path = str(retriever_path)
+        self.device = device
+        self.dtype = dtype
+        self.batch_size = int(batch_size)
+        self.model = None
+        self.tokenizer = None
+        self.max_len = 512
+        self.hidden = None
+
+    @property
+    def dtype_bytes(self) -> int:
+        return 2 if self.dtype in (torch.float16, torch.bfloat16) else 4
+
+    def load(self):
+        """Load the frozen encoder + its tokenizer (idempotent). Fails closed if
+        the checkpoint declares a non-CLS pooling contract, since the cosine
+        scoring below hard-codes BGE's CLS+L2 recipe."""
+        if self.model is not None:
+            return self
+        import json
+        import os
+        from transformers import AutoModel, AutoTokenizer
+
+        pool_cfg = os.path.join(self.path, "1_Pooling", "config.json")
+        if os.path.exists(pool_cfg):
+            with open(pool_cfg) as f:
+                pc = json.load(f)
+            if not pc.get("pooling_mode_cls_token", False):
+                raise ValueError(
+                    f"retriever pooling config {pc} is not CLS; the dense_bge "
+                    f"selector hard-codes the BGE CLS+L2+cosine contract")
+        self.tokenizer = AutoTokenizer.from_pretrained(self.path,
+                                                       local_files_only=True)
+        max_len = int(getattr(self.tokenizer, "model_max_length", 512) or 512)
+        self.max_len = 512 if (max_len > 512 or max_len <= 0) else max_len
+        self.model = AutoModel.from_pretrained(
+            self.path, torch_dtype=self.dtype, local_files_only=True
+        ).to(self.device).eval()
+        self.hidden = int(self.model.config.hidden_size)
+        return self
+
+    @torch.no_grad()
+    def encode(self, texts, is_query: bool = False) -> torch.Tensor:
+        """L2-normalised CLS embeddings ``[N, hidden]`` (float32, on CPU)."""
+        self.load()
+        if is_query:
+            texts = [f"{BGE_QUERY_INSTRUCTION} {t}" for t in texts]
+        embs = []
+        for s in range(0, len(texts), self.batch_size):
+            enc = self.tokenizer(
+                texts[s:s + self.batch_size], padding=True, truncation=True,
+                max_length=self.max_len, return_tensors="pt").to(self.device)
+            cls = self.model(**enc).last_hidden_state[:, 0]         # CLS token
+            cls = torch.nn.functional.normalize(cls, p=2, dim=1)
+            embs.append(cls.float().cpu())
+        if not embs:
+            return torch.zeros((0, int(self.hidden or 0)), dtype=torch.float32)
+        return torch.cat(embs, dim=0)
+
+    def scores(self, context_texts, query_text):
+        """Cosine similarity of ``query_text`` to each chunk text (doc order)."""
+        if not context_texts:
+            return []
+        ctx = self.encode(list(context_texts), is_query=False)      # [n, d]
+        q = self.encode([query_text or ""], is_query=True)          # [1, d]
+        return (ctx @ q[0]).tolist()
+
+    def index_bytes(self, n_chunks: int) -> int:
+        """Size of the chunk-embedding index this retriever would persist."""
+        return int(n_chunks) * int(self.hidden or 0) * self.dtype_bytes
+
+
+def dense_bge_scores(context_chunks, query_ids, retriever, tokenizer):
+    """Frozen-BGE cosine of the query against each context chunk (doc order).
+
+    ``context_chunks`` are backbone token-id tensors and ``query_ids`` the bare
+    question's backbone token ids, so both are detokenised with the BACKBONE
+    ``tokenizer`` (``skip_special_tokens=True``) before being handed to the
+    retriever — the chunk text a text-space dense retriever would see. Returns
+    ``list[float]`` aligned with ``context_chunks`` (higher == more relevant)."""
+    ctx_texts = [tokenizer.decode(c.tolist() if torch.is_tensor(c) else list(c),
+                                  skip_special_tokens=True)
+                 for c in context_chunks]
+    query_text = tokenizer.decode(list(query_ids), skip_special_tokens=True)
+    return retriever.scores(ctx_texts, query_text)
 
 
 # --------------------------------------------------------------------------- #
@@ -372,11 +503,16 @@ def select_context_chunk_indices(
     iter_score="meanpool",
     iter_conf_ratio=0.3,
     iter_max_chunks=64,
+    dense_retriever=None,   # DenseBGERetriever                (dense_bge only)
+    dense_tokenizer=None,   # backbone tokenizer (detokenise)  (dense_bge only)
 ):
     """Return a sorted list of context-chunk indices to pack into the read,
     chosen by the requested selector (see module docstring). Selectors that need
     the cached ``h_j`` (``reader_attn`` / ``iter_reader_attn``) fall back to
-    ``recency`` if the caller did not supply ``context_hj`` / ``query_hj``.
+    ``recency`` if the caller did not supply ``context_hj`` / ``query_hj``;
+    ``dense_bge`` needs ``dense_retriever`` + ``dense_tokenizer`` and raises if
+    either is missing (silently degrading a retriever arm would corrupt the
+    single-variable comparison).
     """
     n_ctx = len(context_chunks)
     if n_ctx == 0:
@@ -405,6 +541,25 @@ def select_context_chunk_indices(
         if not scores:
             return list(range(max(0, n_ctx - k), n_ctx))
         order = sorted(range(n_ctx), key=lambda i: scores[i], reverse=True)
+        return sorted(order[:k])
+
+    if selector == "dense_bge":
+        # Frozen BGE dense retrieval instead of the lexical BM25 ranking; ties
+        # break by ascending index so the ranking is deterministic given the
+        # embeddings. Fail loudly rather than silently degrade to recency: this
+        # selector IS the experimental variable of the dense-retriever arm.
+        if k <= 0:
+            return []
+        if dense_retriever is None or dense_tokenizer is None:
+            raise ValueError(
+                "selector 'dense_bge' needs dense_retriever= (a "
+                "comem.selectors.DenseBGERetriever) and dense_tokenizer= (the "
+                "backbone tokenizer used to detokenise the chunks)")
+        scores = dense_bge_scores(context_chunks, list(query_ids),
+                                  dense_retriever, dense_tokenizer)
+        if not scores:
+            return list(range(max(0, n_ctx - k), n_ctx))
+        order = sorted(range(n_ctx), key=lambda i: (-scores[i], i))
         return sorted(order[:k])
 
     if selector == "iter_bm25":

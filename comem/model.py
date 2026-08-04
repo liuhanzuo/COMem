@@ -681,6 +681,7 @@ class CoMem:
         iter_score: str = "meanpool",
         iter_conf_ratio: float = 0.3,
         iter_max_chunks: int = 64,
+        dense_retriever=None,
         use_kv_cache: bool = True,
         tokenizer=None,
     ) -> str:
@@ -691,7 +692,9 @@ class CoMem:
         the context is a multiple of ``chunk_size`` and the query is one chunk.
 
         ``no_retrieval`` packs ALL context chunks (the KV-Direct / HCache baseline,
-        read grows O(context)); otherwise ``selector`` + ``topk`` keep a fixed read."""
+        read grows O(context)); otherwise ``selector`` + ``topk`` keep a fixed read.
+        ``dense_retriever`` is the frozen sentence encoder the ``dense_bge``
+        selector needs (see :class:`comem.selectors.DenseBGERetriever`)."""
         tok = tokenizer if tokenizer is not None else self.tokenizer
         tokens = input_ids[0]
         chunks = list(tokens.split(chunk_size))
@@ -718,6 +721,7 @@ class CoMem:
                 iter_rounds=iter_rounds, iter_hop_topk=iter_hop_topk,
                 iter_score=iter_score,
                 iter_conf_ratio=iter_conf_ratio, iter_max_chunks=iter_max_chunks,
+                dense_retriever=dense_retriever, dense_tokenizer=tok,
             )
 
         if context_hj is not None:
@@ -784,6 +788,7 @@ class CoMem:
         iter_score: str = "meanpool",
         iter_conf_ratio: float = 0.3,
         iter_max_chunks: int = 64,
+        dense_retriever=None,
         use_kv_cache: bool = True,
         stats=None,
     ) -> List[int]:
@@ -791,7 +796,8 @@ class CoMem:
         context. Selects ``topk`` cached chunks, packs the read, greedy-decodes.
         Returns the generated token ids. ``mode`` in {comem, kvdirect, hcache}
         toggles retrieval (kvdirect/hcache pack all chunks; build CoMem(resume_j=0)
-        for a faithful kvdirect)."""
+        for a faithful kvdirect). ``dense_retriever`` is the frozen encoder the
+        ``dense_bge`` selector needs."""
         if mode not in _MODE_NO_RETRIEVAL:
             raise ValueError(f"unknown mode {mode!r}; expected {list(_MODE_NO_RETRIEVAL)}")
         no_retrieval = _MODE_NO_RETRIEVAL[mode]
@@ -816,6 +822,7 @@ class CoMem:
                 iter_rounds=iter_rounds, iter_hop_topk=iter_hop_topk,
                 iter_score=iter_score,
                 iter_conf_ratio=iter_conf_ratio, iter_max_chunks=iter_max_chunks,
+                dense_retriever=dense_retriever, dense_tokenizer=self.tokenizer,
             )
 
         selected_hj = [context_hj[i] for i in sel_idx]
@@ -842,6 +849,7 @@ class CoMem:
         iter_score: str = "meanpool",
         iter_conf_ratio: float = 0.3,
         iter_max_chunks: int = 64,
+        dense_retriever=None,
         use_kv_cache: bool = True,
         stats=None,
     ) -> str:
@@ -861,6 +869,7 @@ class CoMem:
             needle_chunk_set=needle_chunk_set, iter_rounds=iter_rounds,
             iter_hop_topk=iter_hop_topk, iter_score=iter_score,
             iter_conf_ratio=iter_conf_ratio, iter_max_chunks=iter_max_chunks,
+            dense_retriever=dense_retriever,
             use_kv_cache=use_kv_cache, stats=stats,
         )
         return self.tokenizer.decode(generated, skip_special_tokens=True).strip()

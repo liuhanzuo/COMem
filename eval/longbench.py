@@ -34,7 +34,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from comem import CoMem                          # noqa: E402
 from eval import _cli                            # noqa: E402
 from eval._common import (load_backbone, resolve_baseline,  # noqa: E402
-                          dense_generate, DENSE_MODES)
+                          dense_generate, resolve_reader, install_baseline,
+                          resolve_dense_retriever, FULL_MODEL_MODES)
 
 DATASET2PROMPT = {
     "narrativeqa": (
@@ -219,7 +220,8 @@ def main():
     p.add_argument("--reuse_kv_blockdiag", action="store_true", default=False)
     p.add_argument("--adapter", "--lora_adapter", dest="lora_adapter", default="")
     p.add_argument("--baseline", default="none", choices=_cli.BASELINE_CHOICES)
-    p.add_argument("--selector", default="bm25", choices=["bm25", "recency", "reader_attn"])
+    p.add_argument("--selector", default="bm25", choices=_cli.SELECTOR_CHOICES)
+    _cli.add_baseline_args(p)
     p.add_argument("--topk", type=int, default=12)
     p.add_argument("--sink_tokens", default="bos", choices=["bos", "none"])
     p.add_argument("--chunk_size", type=int, default=512)
@@ -245,11 +247,15 @@ def main():
     datasets_list = args.tasks if args.tasks else DEFAULT_DATASETS
     resume_j, no_retrieval, mode, lora = resolve_baseline(
         args.baseline, args.resume_j, args.lora_adapter)
-    dense_mode = mode if mode in DENSE_MODES else None
+    dense_mode = mode if mode in FULL_MODEL_MODES else None
     model, tok = load_backbone(args.model_path, args.dtype, args.attn_impl,
                                args.device, lora)
+    install_baseline(model, mode, args.kv_budget, args.kv_window)
     cm = CoMem(model, resume_j=resume_j, top_prepay_b=args.top_prepay_b,
                block_diagonal=args.reuse_kv_blockdiag, tokenizer=tok)
+    reader = resolve_reader(cm, mode, args.recompute_ratio)
+    retriever = resolve_dense_retriever(args.selector, args.retriever_path,
+                                        args.device, args.dtype)
     device = torch.device(args.device)
     all_data = load_longbench_dataset(args.hf_dataset, datasets_list, args.data_dir)
     output_path = Path(args.output_dir)
@@ -281,11 +287,11 @@ def main():
                     pred = dense_generate(cm.model, tok, input_ids, dense_mode,
                                           max_new_tokens=max_gen)
                 else:
-                    pred = cm.generate_from_ids(
+                    pred = reader.generate_from_ids(
                         input_ids, chunk_size=args.chunk_size, max_new_tokens=max_gen,
                         selector=args.selector, topk=args.topk,
                         sink_tokens=args.sink_tokens, bare_question_ids=bare_q_ids,
-                        no_retrieval=no_retrieval)
+                        no_retrieval=no_retrieval, dense_retriever=retriever)
             except RuntimeError as e:
                 if "out of memory" not in str(e).lower():
                     raise

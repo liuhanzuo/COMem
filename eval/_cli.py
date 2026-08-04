@@ -13,13 +13,50 @@ collaborator-facing aliases so one habit works everywhere::
 
 ``--j auto`` picks the per-backbone split depth from
 :mod:`comem.model_registry`.
+
+Baseline / selector vocabulary
+------------------------------
+``BASELINE_CHOICES`` / ``SELECTOR_CHOICES`` are shared by every driver, and
+:func:`add_baseline_args` adds the knobs the external baselines need
+(``--recompute_ratio`` for ``cacheblend``, ``--kv_budget`` / ``--kv_window`` for
+``snapkv`` / ``pyramidkv``, ``--retriever_path`` for the ``dense_bge`` selector),
+so they cannot drift between drivers.
 """
 from __future__ import annotations
 
 from comem.model_registry import resolve_resume_j
 
-# every driver advertises the same baseline vocabulary
-BASELINE_CHOICES = ["none", "dense", "kvdirect", "hcache", "streamingllm"]
+# every driver advertises the same baseline vocabulary:
+#   none/kvdirect/hcache -> CoMem re-parameterisations,
+#   dense/streamingllm   -> stock full-context arms,
+#   snapkv/pyramidkv     -> prefill-then-compress KV baselines (comem.kvcompress),
+#   cacheblend           -> full-depth chunk-KV baseline (comem.cacheblend).
+BASELINE_CHOICES = ["none", "dense", "kvdirect", "hcache", "streamingllm",
+                    "snapkv", "pyramidkv", "cacheblend"]
+
+# shared selector vocabulary (``dense_bge`` additionally needs --retriever_path);
+# RULER's ``auto`` per-task routing stays local to that driver.
+SELECTOR_CHOICES = ["bm25", "recency", "oracle", "reader_attn", "iter_reader_attn",
+                    "iter_bm25", "iter_bm25_adaptive", "dense_bge"]
+
+
+def add_baseline_args(p):
+    """Add the shared external-baseline / dense-selector knobs to a driver's parser."""
+    p.add_argument("--recompute_ratio", type=float, default=0.15,
+                   help="cacheblend: fraction of CONTEXT tokens whose KV is "
+                        "recomputed after the blend (r=0 pure reuse, r=1 == full "
+                        "prefill). Sink and query are always recomputed.")
+    p.add_argument("--kv_budget", type=int, default=6657,
+                   help="snapkv/pyramidkv: retained KV tokens per layer including "
+                        "the observation window (default 6657 == CoMem's read "
+                        "pack: BOS 1 + top-12 x 512 + query <= 512).")
+    p.add_argument("--kv_window", type=int, default=32,
+                   help="snapkv/pyramidkv: observation-window size (the recent "
+                        "tokens always kept, whose queries score the past).")
+    p.add_argument("--retriever_path", default="",
+                   help="--selector dense_bge: local frozen BGE dir (e.g. a "
+                        "BAAI/bge-large-en-v1.5 snapshot).")
+    return p
 
 
 def j_type(value):

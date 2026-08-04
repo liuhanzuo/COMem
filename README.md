@@ -72,7 +72,9 @@ answer = model.generate("What is X?",           # retrieve topk → resume → d
   `topk` budget — walk the chain until a hop's best score drops below
   `--iter_conf_ratio`× the round-1 best or `--iter_max_chunks` is hit; **kept as
   an opt-in selector for ρ-tuning experiments, no longer the default**),
-  `recency`, `oracle`.
+  `recency`, `oracle`, `dense_bge` (frozen BGE dense retrieval — CLS+L2+cosine
+  over each chunk's decoded text; the single-variable "dense instead of lexical"
+  arm, needs `--retriever_path`).
 - `mode`: `comem` (retrieval, fixed read; default), `kvdirect` / `hcache`
   (no-retrieval baselines that pack **all** chunks — read grows O(context); build
   `CoMem(resume_j=0)` for a faithful `kvdirect`).
@@ -83,14 +85,17 @@ answer = model.generate("What is X?",           # retrieve topk → resume → d
 ```
 comem/
   model.py       # class CoMem: primitives (write/read/decode/resume) + encode/generate
-  selectors.py   # bm25 / iter_bm25 / iter_bm25_adaptive / reader_attn / iter_reader_attn / recency / oracle
+  selectors.py   # bm25 / iter_bm25 / iter_bm25_adaptive / reader_attn / iter_reader_attn / recency / oracle / dense_bge
   moe.py         # CoMemMoE: device_map-sharded MoE variant
+  cacheblend.py  # CacheBlend-style full-depth chunk-KV baseline (+ its own gate)
+  kvcompress.py  # SnapKV / PyramidKV prefill-then-compress baselines (+ its own gate)
   selftest.py    # CPU correctness gate (python -m comem.selftest)
 train/distill.py # LoRA self-distillation (teacher j=0 → student j) on PG19
 eval/            # thin drivers: build CoMem + generate + official scoring
   ruler.py  babilong.py  longbench.py  locomo.py  longeval.py
 bench/vs_dense.py# CoMem vs Dense speed/accuracy + decode correctness gate
 paper/           # LaTeX source
+EXPERIMENTS.md   # experiment -> paper table -> CLI flag provenance index
 ```
 
 ## Correctness
@@ -104,6 +109,12 @@ paper/           # LaTeX source
   selector (identical tokens),
 - **(D)** KV-cache decode == recompute decode (identical tokens, max|logit diff|
   `< 1e-4`).
+- **(E)** the baseline gates — CacheBlend (RoPE reindex exact, `r=1` == full
+  prefill, `r=0` finite) and SnapKV/PyramidKV (no perturbation when no
+  compression fires, retained-KV budget honoured). Run them alone with
+  `python -m comem.cacheblend` / `python -m comem.kvcompress`.
+- **(F)** the `dense_bge` selector's dispatch, tie-break and fail-closed guard
+  (via an offline stub encoder, so no checkpoint is needed).
 
 ## Reproducing the eval
 
@@ -118,7 +129,10 @@ Every driver shares one unified CLI, so a single habit works everywhere:
 ```
 --model <hf_path_or_name>   --j <int|auto>   --lengths 8k,16k,32k,64k,128k
 --n <samples>   --selector bm25   --adapter <path|none>
---baseline <none|dense|kvdirect|hcache|streamingllm>   --out <dir>
+--baseline <none|dense|kvdirect|hcache|streamingllm|snapkv|pyramidkv|cacheblend>
+--out <dir>
+# baseline-specific: --recompute_ratio (cacheblend) --kv_budget/--kv_window
+#                    (snapkv/pyramidkv) --retriever_path (--selector dense_bge)
 ```
 
 Run through the dispatcher (routes `--benchmark` to the matching driver):
@@ -194,10 +208,42 @@ and LoCoMo iterate their fixed datasets and use `--tasks` / `--locomo_data`.
 | LoCoMo    | `<out>/preds*.jsonl` + `scores.json` | F1 / EM / substring-acc (cat-5 = abstention-correct; `--score_only` merges shards) |
 
 `eval/{longbench,longeval,locomo}.py` support `--score_only` to merge shards.
-Baselines: `--baseline {dense,kvdirect,hcache,streamingllm}` (`dense` = stock
-full-context generation; `streamingllm` = sink+sliding-window truncation then
-dense; `kvdirect`/`hcache` = no-retrieval CoMem packs). LoRA distillation:
-`train/distill.py` then eval with `--adapter <dir>`.
+LoRA distillation: `train/distill.py` then eval with `--adapter <dir>`.
+
+### Baselines (`--baseline`)
+
+| `--baseline`               | What it is                                                                                                                                | Stored per token |
+|----------------------------|-------------------------------------------------------------------------------------------------------------------------------------------|------------------|
+| `none`                     | CoMem itself (retrieval + fixed read at `--j`)                                                                                             | one depth-`j` residual (8 KiB on Qwen3-8B) |
+| `kvdirect` / `hcache`      | no-retrieval CoMem packs (**all** chunks; read grows O(context))                                                                            | — |
+| `dense`                    | stock full-context generation                                                                                                              | — (full prefill each query) |
+| `streamingllm`             | sink + sliding-window truncation, then dense                                                                                               | — |
+| `snapkv` / `pyramidkv`     | prefill-then-compress KV: **full (exact) prefill**, then evict to `--kv_budget` retained tokens/layer and decode from it (`comem.kvcompress`) | bounded KV, but the whole prompt is still prefilled |
+| `cacheblend`               | CacheBlend-style full-depth chunk KV: same selector/pack/sink as CoMem, but caches every layer's chunk K/V, reindexes RoPE and recomputes a `--recompute_ratio` slice (`comem.cacheblend`) | full `L`-layer KV (144 KiB on Qwen3-8B, 18× CoMem) |
+
+`snapkv`/`pyramidkv` default to `--kv_budget 6657` = CoMem's read pack
+(BOS 1 + top-12 × 512 + query ≤ 512), which makes the quality row an
+equal-retained-token diagnostic. `cacheblend` does **not** compress storage — it
+caches the same bytes as a full KV cache and wins only on prefill/TTFT, so report
+its 144 KiB/token tier alongside any latency win.
+
+```bash
+# CacheBlend-style arm, single-variable vs CoMem (same selector/chunk/topk/sink)
+python -m eval.run --benchmark ruler --model /path/to/Qwen3-8B --j auto \
+    --baseline cacheblend --recompute_ratio 0.15 --selector iter_bm25 --topk 12 \
+    --out ruler_results/cacheblend_r015
+
+# equal-retained-budget compressed-KV arms
+python -m eval.run --benchmark ruler --model /path/to/Qwen3-8B --j auto \
+    --baseline snapkv --kv_budget 6657 --kv_window 32 --out ruler_results/snapkv
+
+# dense-retrieval selector swap (CoMem reader unchanged; only the ranking differs)
+python -m eval.run --benchmark ruler --model /path/to/Qwen3-8B --j auto \
+    --selector dense_bge --retriever_path /path/to/bge-large-en-v1.5 --topk 12 \
+    --out ruler_results/dense_bge
+```
+
+See `EXPERIMENTS.md` for which paper table each of these reproduces.
 
 ### Division of labor
 
