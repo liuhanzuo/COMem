@@ -1,0 +1,21 @@
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+& \multicolumn{3}{c}{LongEval accuracy} & Qasper F1 \\
+\cmidrule(lr){2-4}
+Method & 8k & 16k & 32k & All 200 \\
+\midrule
+Replay ($j=0$) & 80.00 & 77.00 & 76.00 & 4.65 \\
+CoMem ($w=0$) & 71.00 & 74.00 & 73.00 & 11.37 \\
+CoMem ($w=32$) & 59.00 & 68.00 & 60.00 & 10.76 \\
+\midrule
+$\Delta(w32-w0)$ & $-12.00$ & $-6.00$ & $-13.00$ & $-0.61$ \\
+95\% paired CI & $[-22,-2]$ & $[-15,3]$ & $[-25,-1]$ & $[-1.43,0.21]$ \\
+\bottomrule
+\end{tabular}
+\caption{Independent fixed-$w=32$ confirmation using the principal suffix adapter in all three arms. LongEval has 100 fresh examples per length; Qasper uses all 200 LongBench examples. Selection, sink, and query tokens are paired. All scores are percentages. Intervals use 20,000 paired example bootstraps, without multiplicity correction. The overlap provides no positive generalization evidence on these tasks.}
+\label{tab:overlap-confirmation}
+\end{table}

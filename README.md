@@ -1,39 +1,58 @@
 # CoMem — Comprehension Memory
 
-**Fixed-size, mid-depth-resume long-context memory for a plain (un-patched) decoder LLM.**
+**Reuse lower-layer document encoding through an intermediate residual cache.**
 
-CoMem lets an 8B model answer questions over arbitrarily long contexts with a
-**constant-size, constant-cost read**, by exploiting a simple observation:
+Early transformer layers act as a semantic encoder: their intermediate residuals
+carry document information that later layers can read. CoMem makes that
+computation reusable across queries by splitting a decoder into a lower encoder
+and an upper reader. This is a functional interface, not a claim that all
+understanding is completed at one universal layer.
 
-> A transformer completes most of its **comprehension** of a token span in its
-> *lower* layers; the *upper* layers increasingly just produce the next-token
-> distribution.
+**[Current paper (PDF)](paper_iclr2027/main.pdf)** ·
+**[LaTeX and editable figures](paper_iclr2027/)** ·
+**[Supplementary experiment scripts](exp/README.md)**
 
-So CoMem splits the backbone at a depth `j` (`resume_j`):
+![Encoder–cache–reader interface and source-length measurements](paper_iclr2027/figures/teaser.png)
 
-- **WRITE** (once, per chunk, chunk-local): `embed → layers[0:j]` over each chunk in
-  isolation, and **cache the depth-`j` hidden `h_j`** (the chunk's comprehended,
-  mid-layer representation) plus its raw token ids (for retrieval).
-- **READ** (per query): **retrieve** the `topk` most relevant cached chunks, **pack**
-  `[sink ; h_j^{c1} ; … ; h_j^{ck} ; h_j^{query}]` into one sequence with fresh
-  contiguous RoPE positions, and **resume** `layers[j:] → norm → lm_head`. Only the
-  upper layers are recomputed, over a *fixed-size* pack — so read cost does not grow
-  with the context length.
+- **Write:** independently encode each document chunk through `layers[0:j]` and
+  store one residual vector per token. A separate token-ID BM25 index addresses
+  the stored chunks.
+- **Read:** select chunks, assemble their cached states with the encoded sink
+  and query, and continue through `layers[j:L]` with causal cross-chunk attention.
+  A self-distilled suffix LoRA learns to consume the independently written states.
+- **Generate:** each new output token still traverses **all layers**. Lower-layer
+  request KV covers the query/generated prefix; upper-layer KV also covers the
+  selected document pack. Only document residuals persist across requests.
 
-`j = 0` is the RAG upper bound (selective full re-forward); `j = L` is closed-book.
+With a fixed chunk budget, chunk size, and query length, model-side Read work is
+bounded independently of stored source length. Write, storage, index construction,
+and lookup still grow with the corpus. `j=0` replays selected raw tokens through
+the full decoder and is the same-evidence depth reference; it is distinct from
+full-source Dense without retrieval.
 
-### Why it works / headline results (Qwen3-8B; see `paper/`)
+### Results and scope
 
-- **Length robustness.** Full-context attention **collapses to 0** past its RoPE
-  window, while CoMem holds **RULER ≈ 100** and **LongEval ≈ 0.98 at 128k tokens** —
-  because the read pack is always a handful of chunks, never the whole context.
-- **Decode speed.** The resumed-band **KV-cache decode** (prefill both bands once,
-  then push one token/step) runs **4–16× faster per token** than re-running the whole
-  read every step, with byte-identical output.
-- **Cheap comprehension memory.** `h_j` is computed once per chunk with only the
-  bottom `j` layers; retrieval is forward-free (lexical BM25 or cosine over the
-  cached `h_j`), so adding memory adds almost no compute over the writes CoMem
-  already does.
+The principal configuration uses Qwen3-8B, `j=12`, 512-token chunks, iterative
+BM25 top-12, and rank-32 LoRA in blocks 12–35. The backbone is frozen.
+
+| Measurement | Result | What it establishes |
+|---|---|---|
+| Cross-benchmark CoMem accuracy | RULER 97.05; LongEval 69.0; LongBench 12.01; BABILong 50.43; LoCoMo 38.27 | Table 1's specified task/length support; the five-score mean is descriptive |
+| Same-evidence, same-adapter H20 depth control | 1.403× selected-pack prefill speedup; RULER 99.19 → 96.07 | Saved lower-layer encoding with a 3.12-point quality cost on a separately sampled paired cohort |
+| bf16 persistent payload | 8 KiB/token residual versus 144 KiB/token full-depth KV | 1/18 of KV payload storage, not a GPU-peak ratio |
+| RTX 5090 full-source comparison, 28 GB cap | Dense OOM at 32k/128k; CoMem completes | End-to-end cost includes document preparation and 128 output tokens; OOMs have no numerical speedup |
+
+Cache fidelity is task-dependent. The no-LoRA interface performs poorly on
+several tasks; full-depth replay can remain preferable even with fewer selected
+chunks. The paper separately reports overlap controls, both adapter settings for
+chunk KV, full-vocabulary distillation diagnostics, clean-subset quality, and
+preparation amortization. Large full-context speedups combine retrieval with
+depth reuse and are not the matched depth-only result.
+
+`paper_iclr2027/` contains the current manuscript with clickable numeric
+citations and its aggregate plot/table inputs. `paper/` retains the ARR source.
+Raw datasets, predictions, weights, private API responses, and execution logs
+are not included in this repository.
 
 ## Install
 
@@ -54,10 +73,15 @@ tok = AutoTokenizer.from_pretrained(PATH)
 lm  = AutoModelForCausalLM.from_pretrained(PATH, torch_dtype="bfloat16").cuda().eval()
 
 model = CoMem(lm, resume_j=12, tokenizer=tok)   # split the backbone at layer 12
-model.encode(long_document)                     # comprehend once → cache h_j per chunk
+model.encode(long_document)                     # encode once → cache h_j per chunk
 answer = model.generate("What is X?",           # retrieve topk → resume → decode
-                        selector="bm25", topk=12, max_new_tokens=32)
+                        selector="iter_bm25", topk=12, max_new_tokens=32,
+                        iter_hop_topk=4)
 ```
+
+This minimal example loads the no-LoRA interface. To reproduce the principal
+paper configuration, load its suffix adapter and use the explicit evaluation
+settings below; the library's automatic selector routing is a separate option.
 
 - `selector`: `auto` (**default for RULER — data-validated per-task routing**
   (8B RULER n=500): `variable_tracking` → **fixed `iter_bm25`** (multi-hop BFS on
@@ -94,7 +118,9 @@ train/distill.py # LoRA self-distillation (teacher j=0 → student j) on PG19
 eval/            # thin drivers: build CoMem + generate + official scoring
   ruler.py  babilong.py  longbench.py  locomo.py  longeval.py
 bench/vs_dense.py# CoMem vs Dense speed/accuracy + decode correctness gate
-paper/           # LaTeX source
+paper_iclr2027/   # current PDF, LaTeX, figures, and aggregate measurements
+paper/           # ARR LaTeX source
+exp/             # supplementary quality and systems controls (see exp/README.md)
 EXPERIMENTS.md   # experiment -> paper table -> CLI flag provenance index
 ```
 
@@ -117,6 +143,12 @@ EXPERIMENTS.md   # experiment -> paper table -> CLI flag provenance index
   (via an offline stub encoder, so no checkpoint is needed).
 
 ## Reproducing the eval
+
+For the current manuscript, use explicit `--j 12`, `--selector iter_bm25`,
+`--topk 12`, and the principal `--adapter` instead of automatic task routing.
+Use `--adapter none` for CoMem without LoRA. The exact no-adapter remeasurement
+and supplementary protocols are in [`exp/README.md`](exp/README.md); synthetic
+cohorts and natural-task generation limits are specified in the paper appendix.
 
 Each `eval/*.py` builds a `CoMem`, runs `generate_from_ids` per sample (the fused
 encode+write+select+decode over one prompt whose trailing chunk is the query), and
@@ -258,4 +290,3 @@ for B in ruler babilong longbench longeval locomo; do
   done
 done
 ```
-

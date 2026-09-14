@@ -1,0 +1,33 @@
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+$j=32$ & 8k PPL ratio & 8k top-1 & 16k PPL ratio & 16k top-1 \\
+\midrule
+Zero-shot & 1.378 & 0.823 & 1.496 & 0.773 \\
+Distilled & 1.071 & 0.895 & 1.078 & 0.871 \\
+\bottomrule
+\end{tabular}
+\caption{Hy3 readout on matched 16-document PG-19 windows. PPL ratio is CoMem-readout perplexity divided by full-context perplexity; top-1 is argmax agreement. Training uses rank-32 LoRA, $\alpha=64$, suffix layers 32 onward, and 4,000 plain-PG-19 distillation steps.}
+\label{tab:hy3}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+Task & 16k & 32k & 64k & 128k & 256k \\
+\midrule
+Single-2 & 98 & 92 & 100 & 98 & 100 \\
+Multikey & 100 & 94 & 100 & 100 & 98 \\
+Read tokens & 4.3k & 4.6k & 4.5k & 4.4k & 4.5k \\
+Context tokens & 16k & 32k & 65k & 131k & 261k \\
+\bottomrule
+\end{tabular}
+\caption{Hy3 RULER needle scores ($n=50$, official scorer), $j=32$, BM25 top-eight, and a self-distilled adapter. Read length stays bounded and no OOM occurs. Context tokens report mean sample lengths. These are portability results rather than a matched reproduction of the Qwen3 frontier.}
+\label{tab:hy3-ruler}
+\end{table}

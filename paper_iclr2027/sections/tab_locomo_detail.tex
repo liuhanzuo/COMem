@@ -1,0 +1,20 @@
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Method & Judge & Judge 1--4 & F1 & Substring \\
+\midrule
+Raw replay $j=0$ & 41.59 & 52.60 & 9.90 & 25.23 \\
+CoMem & 38.27 & 48.64 & 9.15 & 23.36 \\
+KV-Direct & 34.59 & 43.83 & 9.02 & 22.36 \\
+StreamingLLM & 25.63 & 31.04 & 7.67 & 13.75 \\
+InfLLM & 22.21 & 26.43 & 7.39 & 13.34 \\
+MemoryLLM$^\dagger$ & 16.11 & 20.65 & 5.91 & 9.52 \\
+HCache-style$^{\ddagger}$ & 8.11 & 10.13 & 4.67 & 6.29 \\
+\bottomrule
+\end{tabular}
+\caption{LoCoMo on all 1,986 no-chat examples. Judge 1--4 covers 1,540 answerable items; full Judge incorporates the 446 locally scored abstention items. Substring denotes lexical accuracy. $^\dagger$Different backbone. The no-chat CoMem/KV-Direct semantic ordering is not preserved under native chat formatting. $^{\ddagger}$HCache-style uses a retrieval-free checkpoint distinct from the same-split adapter diagnostic.}
+\label{tab:locomo-detail}
+\end{table}

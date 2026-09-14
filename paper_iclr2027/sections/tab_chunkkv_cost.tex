@@ -1,0 +1,49 @@
+\begin{table}[p]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}llrrrrrr@{}}
+\toprule
+Method & Adapter & Prep. & TTFT & Online$_{128}$ & E2E$_{128}$ & Store & GPU \\
+ & & (ms) & (ms) & (s) & (s) & (MiB) & (GB) \\
+\midrule
+\multicolumn{8}{@{}l}{\textit{LongEval 8k ($n=5$)}} \\
+Replay & off & 0.4 & 651.1 & 5.432 & 5.432 & 0.06 & 18.32 \\
+Chunk-KV & off & 1174.2 & 352.8 & 5.109 & 6.291 & 1152.00 & 19.46 \\
+CoMem (without LoRA) & off & 329.7 & 450.4 & 4.717 & 5.049 & 64.00 & 18.02 \\
+\addlinespace[2pt]
+Replay & on & 0.4 & 798.2 & 6.416 & 6.416 & 0.06 & 18.89 \\
+Chunk-KV & on & 1441.6 & 393.9 & 5.995 & 7.445 & 1152.00 & 19.46 \\
+CoMem & on & 328.1 & 597.9 & 5.688 & 6.015 & 64.00 & 18.59 \\
+\midrule
+\multicolumn{8}{@{}l}{\textit{LongEval 16k ($n=5$)}} \\
+Replay & off & 0.6 & 658.3 & 5.437 & 5.438 & 0.12 & 18.33 \\
+Chunk-KV & off & 2377.4 & 366.1 & 5.150 & 7.505 & 2304.00 & 19.46 \\
+CoMem (without LoRA) & off & 664.2 & 457.9 & 4.711 & 5.379 & 128.00 & 18.02 \\
+\addlinespace[2pt]
+Replay & on & 0.6 & 811.1 & 6.426 & 6.427 & 0.12 & 18.90 \\
+Chunk-KV & on & 2951.1 & 403.1 & 6.363 & 9.279 & 2304.00 & 19.46 \\
+CoMem & on & 666.2 & 615.1 & 5.691 & 6.359 & 128.00 & 18.59 \\
+\midrule
+\multicolumn{8}{@{}l}{\textit{LongEval 32k ($n=5$)}} \\
+Replay & off & 1.1 & 652.6 & 5.391 & 5.393 & 0.25 & 18.34 \\
+Chunk-KV & off & 4647.1 & 364.4 & 5.094 & 9.739 & 4608.00 & 19.49 \\
+CoMem (without LoRA) & off & 1311.2 & 457.0 & 4.703 & 6.023 & 256.00 & 18.04 \\
+\addlinespace[2pt]
+Replay & on & 1.1 & 803.7 & 6.399 & 6.400 & 0.25 & 18.92 \\
+Chunk-KV & on & 5708.5 & 399.9 & 5.973 & 11.694 & 4608.00 & 19.49 \\
+CoMem & on & 1319.2 & 613.2 & 5.685 & 7.012 & 256.00 & 18.62 \\
+\midrule
+\multicolumn{8}{@{}l}{\textit{Qasper ($n=5$)}} \\
+Replay & off & 0.3 & 401.7 & 4.246 & 4.246 & 0.03 & 17.85 \\
+Chunk-KV & off & 519.2 & 267.7 & 4.084 & 4.603 & 504.00 & 18.66 \\
+CoMem (without LoRA) & off & 145.4 & 297.0 & 3.945 & 4.096 & 28.00 & 17.65 \\
+\addlinespace[2pt]
+Replay & on & 0.3 & 497.2 & 5.257 & 5.257 & 0.03 & 18.26 \\
+Chunk-KV & on & 631.4 & 310.9 & 5.155 & 5.782 & 504.00 & 18.66 \\
+CoMem & on & 146.5 & 389.9 & 5.190 & 5.334 & 28.00 & 18.06 \\
+\bottomrule
+\end{tabular}
+\caption{Matched evidence costs on RTX 5090: 1,080 formal measurements over 20 prespecified examples, six method--adapter settings, three fresh processes, and three repetitions. Each cell reports the median of three process medians; each process median pools five examples and three repetitions. Preparation constructs a fresh whole-document pinned-CPU store. TTFT and Online start after preparation, include selection and fetch, and end at the first and 128th generated token, respectively. E2E is measured directly from preparation through token 128. Store is the median persistent payload, separate from peak GPU allocation including weights; all attempts fit the 28 GB allocator cap. CoMem uses $j=12,w=0$; replay processes the same selected evidence, not the full source. Chunk-KV is a synchronous CacheBlend-style reference. The 500-example quality evaluation is reported separately in Table~\ref{tab:chunkkv}.}
+\label{tab:chunkkv-cost}
+\end{table}

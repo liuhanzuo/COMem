@@ -1,0 +1,15 @@
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lrr@{}}
+\toprule
+Lower-layer context & Local Read positions & Document-origin positions \\
+\midrule
+Chunk local & 92.5 & 88.0 \\
+Full document + query & 100.0 & 100.0 \\
+\bottomrule
+\end{tabular}
+\caption{Lower-layer context $\times$ upper-layer RoPE positions on paired 8k/16k multikey examples ($n=200$). Selected chunks, adapter, and upper-layer causal connectivity are fixed. The full-document arm also contextualizes the query and retains full-prompt lower-layer KV during decode; it is not a document-state-only intervention.}
+\label{tab:context}
+\end{table}

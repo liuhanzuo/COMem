@@ -1,0 +1,19 @@
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}llrl@{}}
+\toprule
+Writer & Left context & Macro & Write FLOPs \\
+\midrule
+Chunk local & $w=0$ & 92.5 & $1.000\times$ \\
+Overlap & $w=32$ & 98.5 & $1.057\times$ \\
+Overlap & $w=64$ & 98.5 & $1.115\times$ \\
+Overlap & $w=128$ & 99.0 & $1.229\times$ \\
+Trained lower-layer writer & none & 98.5 & $1.000\times$ \\
+Full-document control & full prefix & 100.0 & full-prefix forward \\
+\bottomrule
+\end{tabular}
+\caption{Writer repair on the same paired synthetic multikey cohort. Overlap keeps persistent bytes, query Write, and the online computation graph fixed. FLOPs are theoretical lower-layer Write ratios; wall-clock overhead is larger. The final row also broadens query/decode context. The learned writer uses a separate lower-layer LoRA.}
+\label{tab:overlap}
+\end{table}

@@ -1,0 +1,3 @@
+-r ../requirements.txt
+transformers>=5.16.1
+requests

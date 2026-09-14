@@ -1,0 +1,40 @@
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}llrrrrr@{}}
+\toprule
+Method & Task & 8k & 16k & 32k & 64k & 128k \\
+\midrule
+CoMem & single-2 & 100 & 100 & 99 & 99 & 100 \\
+ & multikey & 95 & 94 & 97 & 91 & 93 \\
+ & tracking & 96.6 & 97.6 & 98.8 & 99.0 & 95.8 \\
+\midrule
+CoMem (without LoRA) & single-2 & 27.0 & 46.0 & 48.0 & 54.0 & 41.0 \\
+ & multikey & 2.0 & 6.0 & 5.0 & 7.0 & 13.0 \\
+ & tracking & 2.0 & 1.4 & 0.0 & 0.2 & 0.4 \\
+\midrule
+KV-Direct & single & 100 & 100 & 100 & 100 & 0 \\
+ & multikey & 100 & 100 & 98 & 88 & 0 \\
+ & tracking & 100 & 100 & 99.8 & 96.2 & 0 \\
+\midrule
+InfLLM & single & 100 & 100 & 92 & 61 & 57 \\
+ & multikey & 100 & 79 & 65 & 45 & 20 \\
+ & tracking & 100 & 96.8 & 90.6 & 81.8 & 79.2 \\
+\midrule
+StreamingLLM & single & 85 & 36 & 20 & 10 & 2 \\
+ & multikey & 83 & 34 & 18 & 13 & 4 \\
+ & tracking & 41.8 & 2.2 & 0.6 & 0.2 & 0.8 \\
+\midrule
+MemoryLLM$^\dagger$ & single & 29 & 40 & 37 & 21 & 21 \\
+ & multikey & 28 & 24 & 25 & 12 & 10 \\
+ & tracking & 0 & 1.2 & 0 & 0 & 0 \\
+\midrule
+HCache-style$^{\ddagger}$ & single & 33 & 5 & 3 & 0 & 0 \\
+ & multikey & 8 & 4 & 0 & 0 & 0 \\
+ & tracking & 1.6 & 1.0 & 0.4 & 0 & 0 \\
+\bottomrule
+\end{tabular}
+\caption{Both CoMem variants use $j=12$. RULER Cohort A: 100 examples per cell, official scorer, and no chat template. The single-needle variant is single-2 for the cohort despite abbreviated labels. CoMem macro is 97.05. KV-Direct uses native RoPE without YaRN. $^\dagger$MemoryLLM uses a different chat-tuned backbone. $^{\ddagger}$HCache-style uses a retrieval-free checkpoint distinct from the same-split adapter diagnostic.}
+\label{tab:ruler-a}
+\end{table}

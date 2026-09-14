@@ -1,0 +1,18 @@
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+Length & Full s & CoMem s & Ratio & Full GB & CoMem GB \\
+\midrule
+8k & .165 & .309 & .53 & 19.92 & 17.60 \\
+16k & .356 & .441 & .81 & 24.55 & 17.67 \\
+32k & .826 & .681 & 1.21 & 33.82 & 17.79 \\
+64k & 2.104 & 1.200 & 1.75 & 52.34 & 18.04 \\
+128k & 6.035 & 2.202 & 2.74 & 89.39 & 18.54 \\
+\bottomrule
+\end{tabular}
+\caption{Same-adapter Write-inclusive pipeline on one B200. Ratio is full time divided by CoMem time. Full processes the entire source; CoMem includes document Write, CPU retrieval, query Write, and upper-layer Read. Index construction and external I/O are excluded. Memory is peak GPU allocation.}
+\label{tab:pipeline-lengths}
+\end{table}

@@ -1,0 +1,58 @@
+\section{Experiments}
+\label{sec:experiments}
+We evaluate the encoder--cache--reader argument in four steps: answer quality from cached encodings, saved document computation and amortization, fidelity at the cache boundary, and the use of saved time for additional evidence.
+\paragraph{Setup.}
+We use Qwen/Qwen3-8B, frozen except for the suffix LoRA, with $j=12$, $c=512$, iterative BM25 top-12, a one-token sink, greedy decoding, and plain-text prompts unless stated otherwise. Evaluation covers RULER, LongEval, six LongBench QA datasets, BABILong, and all 1,986 LoCoMo questions \citep{ruler,longchat,longbench,babilong,locomo}. Main-table RULER averages single-2, multikey-1, and variable tracking across five lengths from 8k to 128k, with 100 examples per cell. Appendix~\ref{app:protocol} specifies generation limits, sink conventions, metrics, and control cohorts.
+
+\input{sections/tab_accuracy}
+\subsection{Accuracy: reading the cached semantic encodings}
+\label{sec:quality}
+Table~\ref{tab:accuracy} compares seven configurations across five benchmarks. CoMem has the highest descriptive average, although full-context KV-Direct is stronger on BABILong and slightly stronger on LongBench. CoMem without LoRA scores 16.87 on RULER and 0.2 on LongEval, showing that the unadapted interface performs poorly on these tasks. This overview summarizes operating points; paired controls below isolate depth reuse.
+
+The matched replay experiment uses separately sampled RULER examples with single-3 (Appendix~\ref{app:diagnostics}). Both arms share the checkpoint, adapter, examples, selected chunks, order, sink, and mask. Replay reaches 99.19 versus CoMem's 96.07: a 3.12-point fidelity cost at fixed evidence (95\% bootstrap interval $[2.36,3.93]$). This is a separate cohort from Table~\ref{tab:accuracy}.
+
+The cost depends on the task. LongEval drops from 97.2 to 69.0 and LoCoMo Judge from 41.59 to 38.27. On the same 1,150 LongBench examples, unadapted replay and CoMem score 12.18 and 12.01 macro F1; both remain low. Strict PG-19 overlap filtering retains 1,053 examples and gives 12.21 and 12.05, preserving this near tie and CoMem's 2.15-point gain over its no-LoRA variant (Appendix~\ref{app:clean-longbench}). BABILong favors full-context KV-Direct on qa1/qa2 and CoMem on qa5. These natural-task replay references do not all share the RULER control's adapter setting, so they measure deployment configurations rather than one adaptation-matched effect.
+
+Selection can nevertheless improve over processing the entire source. CoMem exceeds unextended KV-Direct on the main-table RULER aggregate and the no-chat LoCoMo Judge score. This is the combined effect of selection, adaptation, and the residual interface. It is not evidence that depth reuse itself improves accuracy: raw replay of selected evidence is stronger. The LoCoMo ordering is also prompt-dependent; with native chat formatting, KV-Direct scores 38.22 and CoMem 37.76 (Appendix~\ref{app:stats}).
+
+Length extension changes the full-context reference. Qwen3-8B's native window is 40,960 tokens. In the separate factor-4 YaRN comparison, full-context KV-Direct reaches 100 on 128k single-needle retrieval, versus CoMem's 98, while CoMem is stronger on variable tracking (99.0 versus 57.8). SnapKV and PyramidKV also perform strongly after full-prompt prefill on the common shorter support. These results bound the claim to selected evidence and the measured systems trade-off, rather than universal accuracy gains beyond a position limit.
+
+\subsection{Efficiency: reusing lower-layer document encoding}
+\label{sec:infra}
+\input{sections/tab_infra}
+Table~\ref{tab:infra} reports device-specific systems measurements. On RTX 5090, full-source Dense is compared with CoMem from 8k to 128k under a 28 GB memory limit and a shared adapter. Dense receives the entire source and query; CoMem resumes at $j=12$ using cached residual states of 12 selected chunks and the query states. E2E includes full document preparation and 128 output tokens. This measures their complete configurations, while same-evidence replay isolates depth reuse in Appendix~\ref{app:local-infra}. The adapter is shared with Table~\ref{tab:accuracy}, but the local cost workloads contain different inputs. The Dense-to-CoMem E2E ratios are $1.26\times$ at 8k and $1.89\times$ at 16k, with document Write charged to each CoMem request. Dense exceeds the memory cap at 32k and 128k; no latency or speedup is inferred from these OOMs.
+
+In the H20 same-pack, same-adapter depth comparison, selected-pack prefill falls from 931.9 to 664.4\,ms. The $1.403\times$ speedup accompanies the 3.12-point matched RULER loss above. This timer excludes selection, reusable Write, fetch, and decode. Adding the measured autoregressive decode components reduces the prefill-plus-decode speedup to approximately $1.07$--$1.09\times$.
+
+The H20 latency calibration measures time to first logits with online selection and fetch included: 703.7\,ms for replay at a maximum of ten chunks and 699.8\,ms for CPU-pinned CoMem at twelve. This is a budget comparison rather than a same-pack depth measurement. The B300 experiment compares same-adapter full prefill with store-ready CoMem (15,919 versus 194.8\,ms; $81.7\times$). This combines selection and depth reuse, with preparation and fetch excluded. The B200 pipeline group attaches the same adapter to both paths and includes CoMem's document Write, CPU retrieval, query Write, and upper-layer Read. On B200, the pipeline speedup reaches $2.74\times$ at 128k, but CoMem is slower at 8k and 16k; index construction and external I/O remain outside that timer. These groups cannot be combined into a single acceleration claim.
+
+\paragraph{Residuals versus chunk KV.}
+The matched chunk-KV control tests all three paths with and without the principal adapter (Appendix~\ref{app:chunkkv}). CoMem's LongEval accuracy of 72.67 is close to unadapted chunk-KV's 73.00, at 8 versus 144 KiB per token. Applying the CoMem-trained adapter lowers chunk-KV to 55.67. On RTX 5090 at 32k with the shared adapter, chunk-KV has lower TTFT (400 versus 613\,ms), but CoMem has lower Write-inclusive E2E for 128 output tokens (7.01 versus 11.69\,s). This measures a synchronous reference, not native CacheBlend performance.
+
+\paragraph{When does preprocessing amortize?}
+Let $W_C$ be CoMem's one-time preparation cost, $I_0$ the raw-replay preparation cost, and $T_C,T_0$ the measured per-query costs, including fetch, Read, and decode. With common selection costs cancelling, the crossover is
+\begin{equation}
+ Q^\star=\frac{W_C-I_0}{T_0-T_C},\qquad T_0>T_C.
+ \label{eq:breakeven}
+\end{equation}
+Actual reuse counts round this threshold up to an integer. If per-query savings are nonpositive and preparation is more expensive, no finite crossover exists. CPU-pinned storage breaks even at 8.9--10.9 queries at 32k for outputs up to 128 tokens, rising to 27.6--37.4 at 128k. At one million stored tokens, preparation needs substantially more reuse. Longer generation can nearly erase the saving: the 32k GPU-resident case has no finite crossover at 512 output tokens. Appendix~\ref{app:systems} gives all storage placements and generation lengths. These single-query measurements do not establish throughput or tail latency.
+
+\subsection{Fidelity: context and adaptation at the cache boundary}
+\label{sec:diagnosis}
+The encoder view predicts reusable semantic content, but not equivalence to a continuous forward pass. We examine whether losses arise from continuation, encoding context, or the reader's ability to use independently written states.
+\paragraph{Continuation correctness and missing context are separate.}
+A continuous-prefix oracle computes the lower layers on the selected assembled sequence for every query and then resumes at $h_{12}$. It exactly recovers raw replay on the paired control examples. This verifies continuation with compatible states, but forfeits their cross-query reuse. A separate context--position control keeps selected chunks, the suffix adapter, and upper-layer causal connectivity fixed while varying lower-layer context scope and upper-layer RoPE coordinates.
+
+On the paired 8k/16k multikey cohort, chunk-local Write reaches 92.5 with local Read positions and 88.0 with document-origin positions. Full-document lower-layer context reaches 100.0 under both conventions. However, this control also contextualizes the query and retains full-document lower-layer KV during decode. It establishes recovery under broader context, not an isolated effect of cached document states or a fixed-evidence comparison. Changing positions alone does not repair the loss (Appendix~\ref{app:diagnostics}).
+
+\paragraph{A local context extension is task-dependent.}
+Overlap-Write with 32 left-context tokens raises multikey accuracy from 92.5 to 98.5 (paired 95\% gain interval $[3.0,9.5]$). Only document-block encoding changes; query Write, lower-layer decode, stored bytes, and the online computation graph remain fixed. The theoretical lower-layer Write FLOP ratio is $1.057\times$, with larger wall-clock overhead. However, a fixed-$w=32$ confirmation on 300 fresh LongEval examples reduces accuracy from 72.67 to 62.33 ($-10.33$ points, $[-16.33,-4.33]$). On all 200 Qasper examples, F1 changes from 11.37 to 10.76 ($-0.61$, $[-1.43,0.21]$). On a prespecified 20-example RTX 5090 subset, overlap adds 17.9--19.4\% to document Write and 1.1--4.2\% to E2E, with unchanged stored bytes (Appendix~\ref{app:overlap-cost}). The repair is task-dependent.
+
+\paragraph{Adaptation and interaction matter independently.}
+Without adaptation, deeper frozen splits reduce LoCoMo Judge from 32.78 at $j=6$ to 24.52 at $j=12$; suffix distillation restores the latter to 38.27. On held-out PG-19 books, it also reduces full-vocabulary teacher--student KL from .442 to .304, beyond improving the truncated training objective (Appendix~\ref{app:distillation-validation}). Separately distilled splits show faster Read but severe quality loss at $j=18$; differing adapter spans preclude a training-compute-matched ablation. Full causal cross-chunk processing also improves multikey accuracy over block-diagonal processing with the same query access (Appendix~\ref{app:diagnostics}).
+
+\subsection{Can saved encoding time buy useful evidence?}
+\label{sec:equallatency}
+We select maximum chunk budgets of ten for replay and twelve for CoMem using latency alone on three disjoint 32k multikey documents, then compare quality on nine equally weighted task--length cells. Per-cell latency on this quality mixture is unreported, so the comparison establishes an ordering under the calibrated budgets. With iterative BM25 for both arms, replay scores 64.78 versus CoMem's 53.22. The CoMem-minus-replay difference is $-11.56$ points; hierarchical resampling over cells and examples gives a 95\% interval of $[-18.67,-5.11]$. The advantage remains negative after dropping any single cell. At these chunk budgets, full-depth replay is preferable on this mixture.
+
+Replacing only replay's selector with frozen BGE changes its score to 54.22. The resulting one-point edge has a hierarchical interval spanning zero. This is a comparison of selector choices, not a same-evidence test of depth. The LoCoMo slice contains one conversation, further limiting generalization. Thus saving encoder work can increase the evidence budget, but additional chunks do not necessarily offset the residual interface's fidelity cost. Appendix~\ref{app:equal} gives absolute latencies, cell deltas, and the resampling protocol.

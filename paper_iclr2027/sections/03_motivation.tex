@@ -1,0 +1,10 @@
+\section{Early Layers as a Reusable Semantic Encoder}
+\label{sec:motivation}
+\paragraph{Semantic information is available before the final readout.}
+The lower transformer blocks encode token identity and context into a residual representation that subsequent blocks refine for prediction, consistent with layerwise studies of feature construction and readout \citep{stagesofinference}. Our probes on SST2, WiC, and RTE examine information accessible from these states. SST2 probe accuracy peaks near 0.90, compared with approximately 0.71 for lexical features (Appendix~\ref{app:semantic-probes}). This motivates treating the lower prefix as a semantic encoder whose output can be cached before the final LM head. The claim concerns accessible representations, not a universal depth at which understanding is complete.
+
+\paragraph{The remaining layers must be able to read the cached encoding.}
+Storing semantic information and making it usable by a particular reader are different requirements. Independent chunk encoding enables query-independent reuse, but omits lower-layer attention to earlier document chunks. The upper reader must therefore consume states that differ from those in a continuous forward pass. This motivates adapting the suffix while preserving causal interaction across the selected chunks and query. We test readability directly with matched replay and context controls: LongEval's 64--76\% accuracy after a retrieval hit shows why a useful representation alone does not guarantee a correct answer.
+
+\paragraph{Saved Read work must repay preparation.}
+Placing a cache after the encoder removes its document computation from subsequent requests. A deeper split prepays more layers, while every query still runs the reader on the selected states. This requires upfront Write and storage, so reuse frequency, output length, and fetch cost determine the end-to-end benefit. We first hold evidence fixed to measure the saved encoding work and its quality cost, then test amortization and whether replay can answer more accurately with fewer chunks under latency-calibrated budgets.

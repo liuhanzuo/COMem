@@ -1,0 +1,19 @@
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Source / store & $G=1$ & $G=32$ & $G=128$ & $G=512$ \\
+\midrule
+32k / CPU pinned & 8.9 & 9.2 & 10.9 & 94.0 \\
+32k / GPU resident & 8.4 & 7.7 & 5.5 & $\infty$ \\
+128k / CPU pinned & 27.6 & 29.7 & 37.4 & 520.1 \\
+128k / GPU resident & 25.8 & 26.8 & 27.2 & 164.2 \\
+1M / CPU pinned & 198.2 & 266.7 & 421.3 & 302.6 \\
+1M / GPU resident & 180.2 & 183.0 & 190.6 & 574.7 \\
+\bottomrule
+\end{tabular}
+\caption{Full repeated-query break-even grid. Each cell is $Q^\star$ in queries from Equation~\ref{eq:breakeven}; $G$ is generated tokens. Fetch, Read, and decode are included. Infinite crossover denotes nonpositive measured per-query savings. Values derive from three process medians and are workload-specific.}
+\label{tab:break-even}
+\end{table}

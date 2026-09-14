@@ -1,0 +1,18 @@
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+& \multicolumn{2}{c}{NarrativeQA} & \multicolumn{2}{c}{2WikiMQA} & \multicolumn{2}{c}{Six-task macro} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(l){6-7}
+Method & Full & Clean & Full & Clean & Full & Clean \\
+\midrule
+Replay $j=0$ & 3.81 & 3.99 & 12.34 & 12.31 & 12.18 & 12.21 \\
+CoMem & 4.03 & 4.32 & 10.72 & 10.69 & 12.01 & 12.05 \\
+CoMem (without LoRA) & 3.87 & 4.14 & 9.65 & 9.62 & 9.86 & 9.90 \\
+\bottomrule
+\end{tabular}
+\caption{Full and strict-clean LongBench F1 from the same per-method predictions. NarrativeQA retains 104/200 examples and 2WikiMQA retains 199/200; the other four datasets are unchanged, giving 1,053/1,150 examples. The macro weights all six datasets equally in both columns. Both CoMem configurations use $j=12$; replay has no adapter. Full-set values are the corresponding results in Table~\ref{tab:longbench-detail}. Filtering uses source-document containment below .10 against the full PG-19 training split and is independent of method outputs.}
+\label{tab:clean-longbench}
+\end{table}

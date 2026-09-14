@@ -1,0 +1,15 @@
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+Measure & qa1 & qa2 & LongEval & Multikey & LoCoMo \\
+\midrule
+Dense recall@12 & .52 & .45 & .58 & .81 & .70 \\
+Raw-reader quality & .45 & .31 & .57 & .82 & .18 \\
+\bottomrule
+\end{tabular}
+\caption{Frozen BGE-large-en-v1.5 diagnostic with the same chunks and a Qwen3-8B $j=0$ reader ($n=100$ per cell). Length is 16k except for native-length LoCoMo. Entries use the original 0--1 scale. This is a retriever diagnostic, not the principal semantic-Judge comparison.}
+\label{tab:dense-retrieval}
+\end{table}

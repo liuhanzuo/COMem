@@ -1,0 +1,36 @@
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabularx}{\linewidth}{lll*{5}{>{\raggedleft\arraybackslash}X}}
+\toprule
+Source & Method & Phase & P1 & P2 & P3 & Peak GB & OOM\\
+\midrule
+8k & Dense & Prefill & 1194.4 & 1222.1 & 1159.5 & 19.66 & 0/9\\
+ &  & TTFT & 1165.9 & 1231.9 & 1162.5 & 19.66 & 0/9\\
+ &  & E2E$_{128}$ & 8124.3 & 7987.6 & 7643.4 & 19.66 & 0/9\\
+\midrule
+8k & CoMem & Prefill & 607.1 & 640.5 & 601.9 & 18.68 & 0/9\\
+ &  & TTFT & 652.6 & 672.4 & 639.2 & 18.71 & 0/9\\
+ &  & E2E$_{128}$ & 6537.7 & 6331.6 & 6073.1 & 18.71 & 0/9\\
+\midrule
+16k & Dense & Prefill & 2819.0 & 2684.8 & 2679.0 & 22.49 & 0/9\\
+ &  & TTFT & 2820.0 & 2681.3 & 2680.2 & 22.49 & 0/9\\
+ &  & E2E$_{128}$ & 12680.3 & 12085.8 & 12093.9 & 22.49 & 0/9\\
+\midrule
+16k & CoMem & Prefill & 634.3 & 606.5 & 602.8 & 18.68 & 0/9\\
+ &  & TTFT & 685.2 & 647.0 & 648.0 & 18.71 & 0/9\\
+ &  & E2E$_{128}$ & 6703.1 & 6407.2 & 6392.6 & 18.71 & 0/9\\
+\midrule
+32k & Dense & Prefill & OOM & OOM & OOM & OOM & 9/9\\
+ &  & TTFT & OOM & OOM & OOM & OOM & 9/9\\
+ &  & E2E$_{128}$ & OOM & OOM & OOM & OOM & 9/9\\
+\midrule
+128k & Dense & Prefill & OOM & OOM & OOM & OOM & 9/9\\
+ &  & TTFT & OOM & OOM & OOM & OOM & 9/9\\
+ &  & E2E$_{128}$ & OOM & OOM & OOM & OOM & 9/9\\
+\bottomrule
+\end{tabularx}
+\caption{Fresh RTX 5090 measurements with the shared adapter and a 28 GB total CUDA allocator cap. Dense receives the full source plus 513 query/BOS tokens; CoMem resumes from cached $j=12$ residual states of 12 selected chunks. P1--P3 are independent process medians in milliseconds, each from three documents with one warmup and three formal repetitions per document. OOM counts failed document/process cells out of nine; repetitions stop after an OOM. Failed entries have no completed latency or peak-memory value. Peak GB is the maximum allocated memory including weights. Retained 32k/128k CoMem process results appear in the subsequent diagnostic tables.}
+\label{tab:dense5090}
+\end{table}

@@ -1,0 +1,53 @@
+% Rewritten from the user-designated ARR PDF, 12 September 2026.
+% Official ICLR 2027 style files are included without modification.
+% Compile with pdflatex -no-shell-escape, bibtex, then pdflatex twice.
+\documentclass{article}
+\PassOptionsToPackage{sort}{natbib}
+\usepackage{iclr2027_conference,times}
+% Numeric references in order of first citation, as requested by the author.
+\setcitestyle{numbers,square,citesep={,}}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{microtype,amsmath,amssymb,booktabs,graphicx,multirow}
+\usepackage{enumitem,tabularx,array,flafter,placeins}
+\usepackage[table]{xcolor}
+\definecolor{resultshade}{gray}{0.94}
+\definecolor{paperlink}{RGB}{0,70,145}
+\usepackage{hyperref,url}
+\hypersetup{colorlinks=true,linkcolor=paperlink,citecolor=paperlink,urlcolor=paperlink,
+  pdfborder={0 0 0},pdftitle={CoMem: Reusing Transformer Depth across Queries},pdfauthor={Anonymous}}
+\newcommand{\writepass}{\textsc{Write}}
+\newcommand{\selectpass}{\textsc{Select}}
+\newcommand{\readpass}{\textsc{Read}}
+\newcommand{\comem}{CoMem}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\renewcommand{\topfraction}{0.9}
+\renewcommand{\bottomfraction}{0.8}
+\renewcommand{\textfraction}{0.08}
+\renewcommand{\floatpagefraction}{0.75}
+\setcounter{topnumber}{3}
+\setcounter{totalnumber}{4}
+\title{CoMem: Reusing Transformer Depth across Queries}
+\author{Anonymous authors\\Paper under double-blind review}
+% \iclrfinalcopy
+\begin{document}
+\maketitle
+\input{sections/00_abstract}
+\input{sections/01_introduction}
+\input{sections/02_related}
+\input{sections/03_motivation}
+\input{sections/04_methodology}
+\input{sections/05_experiments}
+\input{sections/06_conclusion}
+\input{sections/07_statements}
+\bibliography{refs}
+\bibliographystyle{unsrtnat}
+\clearpage
+\appendix
+\input{sections/08_protocol}
+\input{sections/09_diagnostics}
+\input{sections/10_benchmarks}
+\input{sections/11_systems}
+\input{sections/12_statistics}
+\input{sections/13_limitations}
+\end{document}

@@ -1,0 +1,14 @@
+\FloatBarrier
+\section{Limitations}
+\label{app:limitations}
+\paragraph{Quality and generality.}
+The main evidence concerns one Qwen3-8B checkpoint, English benchmarks, lexical retrieval, and one flagship adapter. Raw replay is stronger on the matched depth test and the same-selector mixture at latency-calibrated chunk budgets; LongEval shows a large representation cost, and LoCoMo's full-context ordering reverses under chat formatting. The diagnostic BGE difference is unresolved. Broader model sweeps test portability rather than matched replication, and the additional training runs confound seed with effective batch size. The probe results concern accessibility to a readout, not the causal location of understanding.
+
+\paragraph{Scope of repair.}
+The context--position control broadens query and decode visibility as well as document states, so it does not isolate document-cache fidelity. The multikey overlap gain does not generalize to the independent LongEval/Qasper evaluation; the latter uses capped plain-text generation and yields low QA scores. The separate trained writer still lacks natural-task validation. An oracle computed afresh on the full pack is not a reusable solution. Other error sources may dominate on tasks requiring broad coverage, long chains, or low-overlap retrieval.
+
+\paragraph{Serving assumptions.}
+The workload assumes repeated queries over stable corpora with open-weight models. Residual storage is linear and substantially larger than token IDs; indexing and lookup grow with the store. Changing the tokenizer, model weights, split, or lower-layer computation may require rewriting states. Overlap can propagate invalidation into a neighboring chunk. Timing depends on hardware, kernels, batch size, storage tier, and generation length. The reported request measurements are single-query medians, without concurrent model throughput or p95/p99 tails; large-output crossovers can be unstable. Quantization, eviction, update contention, and multi-tenancy are not evaluated.
+
+\paragraph{Comparators and reproducibility.}
+The CacheBlend-style controls match evidence and both adapter settings, but use two full bootstrap layers and a fixed repair set, not the native serving system. Timings cover 20 examples with synchronous fetch/recomputation; the shared CoMem adapter is not KV-specific adaptation. Other PIC and learned modular-cache systems lack matched backbone/hardware comparisons. Full-context, retained-KV, same-pack replay, and store-ready measurements answer different questions. The undated GPT-4o endpoint and ten LoCoMo conversations limit reproducibility and population inference. LongBench clean-subset analysis covers three methods and near-verbatim PG-19 overlap, leaving backbone-pretraining exposure unknown. Formatted-example quality tests differ from source/query-separated serving. Long-form generation, code, multilingual, multimodal, and continually updated memory remain open.

@@ -1,0 +1,356 @@
+{
+  "complete": true,
+  "samples": 500,
+  "outputs": 1500,
+  "cpu_rescore_equal": true,
+  "cells": {
+    "longeval_8k": {
+      "n": 100,
+      "metric": "accuracy",
+      "scores_percent": {
+        "replay": 80.0,
+        "w0": 71.0,
+        "w32": 59.0
+      },
+      "w32_minus_w0": {
+        "difference_pp": -12.0,
+        "ci95_pp": [
+          -22.0,
+          -2.0
+        ],
+        "bootstrap_replicates": 20000,
+        "unit": "paired example; length-stratified for LongEval macro"
+      },
+      "w32_minus_replay": {
+        "difference_pp": -21.0,
+        "ci95_pp": [
+          -32.0,
+          -10.0
+        ],
+        "bootstrap_replicates": 20000,
+        "unit": "paired example; length-stratified for LongEval macro"
+      },
+      "paired_wins_losses": {
+        "w32_vs_w0": {
+          "wins": 9,
+          "losses": 21
+        },
+        "w32_vs_replay": {
+          "wins": 7,
+          "losses": 28
+        }
+      },
+      "at_generation_limit": {
+        "replay": 100,
+        "w0": 100,
+        "w32": 100
+      }
+    },
+    "longeval_16k": {
+      "n": 100,
+      "metric": "accuracy",
+      "scores_percent": {
+        "replay": 77.0,
+        "w0": 74.0,
+        "w32": 68.0
+      },
+      "w32_minus_w0": {
+        "difference_pp": -6.0,
+        "ci95_pp": [
+          -15.0,
+          3.0
+        ],
+        "bootstrap_replicates": 20000,
+        "unit": "paired example; length-stratified for LongEval macro"
+      },
+      "w32_minus_replay": {
+        "difference_pp": -9.0,
+        "ci95_pp": [
+          -20.0,
+          2.0
+        ],
+        "bootstrap_replicates": 20000,
+        "unit": "paired example; length-stratified for LongEval macro"
+      },
+      "paired_wins_losses": {
+        "w32_vs_w0": {
+          "wins": 7,
+          "losses": 13
+        },
+        "w32_vs_replay": {
+          "wins": 11,
+          "losses": 20
+        }
+      },
+      "at_generation_limit": {
+        "replay": 100,
+        "w0": 100,
+        "w32": 100
+      }
+    },
+    "longeval_32k": {
+      "n": 100,
+      "metric": "accuracy",
+      "scores_percent": {
+        "replay": 76.0,
+        "w0": 73.0,
+        "w32": 60.0
+      },
+      "w32_minus_w0": {
+        "difference_pp": -13.0,
+        "ci95_pp": [
+          -25.0,
+          -1.0
+        ],
+        "bootstrap_replicates": 20000,
+        "unit": "paired example; length-stratified for LongEval macro"
+      },
+      "w32_minus_replay": {
+        "difference_pp": -16.0,
+        "ci95_pp": [
+          -28.0,
+          -4.0
+        ],
+        "bootstrap_replicates": 20000,
+        "unit": "paired example; length-stratified for LongEval macro"
+      },
+      "paired_wins_losses": {
+        "w32_vs_w0": {
+          "wins": 12,
+          "losses": 25
+        },
+        "w32_vs_replay": {
+          "wins": 12,
+          "losses": 28
+        }
+      },
+      "at_generation_limit": {
+        "replay": 100,
+        "w0": 100,
+        "w32": 100
+      }
+    },
+    "qasper": {
+      "n": 200,
+      "metric": "F1",
+      "scores_percent": {
+        "replay": 4.645345789635219,
+        "w0": 11.368900923335982,
+        "w32": 10.756283305873598
+      },
+      "w32_minus_w0": {
+        "difference_pp": -0.6126176174623833,
+        "ci95_pp": [
+          -1.431704562512298,
+          0.21036183637187067
+        ],
+        "bootstrap_replicates": 20000,
+        "unit": "paired example; length-stratified for LongEval macro"
+      },
+      "w32_minus_replay": {
+        "difference_pp": 6.110937516238379,
+        "ci95_pp": [
+          4.858565790948764,
+          7.4025853155557355
+        ],
+        "bootstrap_replicates": 20000,
+        "unit": "paired example; length-stratified for LongEval macro"
+      },
+      "at_generation_limit": {
+        "replay": 200,
+        "w0": 200,
+        "w32": 200
+      }
+    },
+    "longeval_macro": {
+      "n": 300,
+      "metric": "accuracy",
+      "scores_percent": {
+        "replay": 77.66666666666666,
+        "w0": 72.66666666666667,
+        "w32": 62.33333333333333
+      },
+      "w32_minus_w0": {
+        "difference_pp": -10.333333333333334,
+        "ci95_pp": [
+          -16.333333333333332,
+          -4.333333333333334
+        ],
+        "bootstrap_replicates": 20000,
+        "unit": "paired example; length-stratified for LongEval macro"
+      },
+      "w32_minus_replay": {
+        "difference_pp": -15.333333333333334,
+        "ci95_pp": [
+          -21.666666666666668,
+          -9.0
+        ],
+        "bootstrap_replicates": 20000,
+        "unit": "paired example; length-stratified for LongEval macro"
+      },
+      "paired_wins_losses": {
+        "w32_vs_w0": {
+          "wins": 28,
+          "losses": 59
+        },
+        "w32_vs_replay": {
+          "wins": 30,
+          "losses": 76
+        }
+      },
+      "at_generation_limit": {
+        "replay": 300,
+        "w0": 300,
+        "w32": 300
+      }
+    }
+  },
+  "exploratory_boundary": {
+    "record_crosses_boundary": {
+      "n": 10,
+      "scores_percent": {
+        "replay": 50.0,
+        "w0": 20.0,
+        "w32": 40.0
+      }
+    },
+    "record_does_not_cross_boundary": {
+      "n": 290,
+      "scores_percent": {
+        "replay": 78.62068965517241,
+        "w0": 74.48275862068967,
+        "w32": 63.10344827586207
+      }
+    },
+    "record_starts_in_first_32_positions": {
+      "n": 20,
+      "scores_percent": {
+        "replay": 75.0,
+        "w0": 45.0,
+        "w32": 80.0
+      }
+    },
+    "full_record_in_selected_or_query": {
+      "n": 294,
+      "scores_percent": {
+        "replay": 78.57142857142857,
+        "w0": 74.14965986394559,
+        "w32": 63.26530612244898
+      }
+    },
+    "full_record_added_only_by_overlap": {
+      "n": 1,
+      "scores_percent": {
+        "replay": 100.0,
+        "w0": 0.0,
+        "w32": 0.0
+      }
+    },
+    "full_record_absent_even_after_overlap": {
+      "n": 5,
+      "scores_percent": {
+        "replay": 20.0,
+        "w0": 0.0,
+        "w32": 20.0
+      }
+    }
+  },
+  "correctness": [
+    {
+      "teacher": {
+        "max_abs_difference": 0.0,
+        "top1_equal": true
+      },
+      "bos_token_id": 151643,
+      "arms": {
+        "replay": {
+          "cached_recompute_equal": true,
+          "state_positions": 1024,
+          "released_path_equal": true
+        },
+        "w0": {
+          "cached_recompute_equal": true,
+          "state_positions": 1024,
+          "released_path_equal": true
+        },
+        "w32": {
+          "cached_recompute_equal": true,
+          "state_positions": 1024
+        }
+      },
+      "same_persistent_state_shape": true
+    },
+    {
+      "teacher": {
+        "max_abs_difference": 0.0,
+        "top1_equal": true
+      },
+      "bos_token_id": 151643,
+      "arms": {
+        "replay": {
+          "cached_recompute_equal": true,
+          "state_positions": 1024,
+          "released_path_equal": true
+        },
+        "w0": {
+          "cached_recompute_equal": true,
+          "state_positions": 1024,
+          "released_path_equal": true
+        },
+        "w32": {
+          "cached_recompute_equal": true,
+          "state_positions": 1024
+        }
+      },
+      "same_persistent_state_shape": true
+    },
+    {
+      "teacher": {
+        "max_abs_difference": 0.0,
+        "top1_equal": true
+      },
+      "bos_token_id": 151643,
+      "arms": {
+        "replay": {
+          "cached_recompute_equal": true,
+          "state_positions": 1024,
+          "released_path_equal": true
+        },
+        "w0": {
+          "cached_recompute_equal": true,
+          "state_positions": 1024,
+          "released_path_equal": true
+        },
+        "w32": {
+          "cached_recompute_equal": true,
+          "state_positions": 1024
+        }
+      },
+      "same_persistent_state_shape": true
+    },
+    {
+      "teacher": {
+        "max_abs_difference": 0.0,
+        "top1_equal": true
+      },
+      "bos_token_id": 151643,
+      "arms": {
+        "replay": {
+          "cached_recompute_equal": true,
+          "state_positions": 1024,
+          "released_path_equal": true
+        },
+        "w0": {
+          "cached_recompute_equal": true,
+          "state_positions": 1024,
+          "released_path_equal": true
+        },
+        "w32": {
+          "cached_recompute_equal": true,
+          "state_positions": 1024
+        }
+      },
+      "same_persistent_state_shape": true
+    }
+  ]
+}

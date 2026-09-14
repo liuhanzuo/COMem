@@ -1,0 +1,18 @@
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+Configuration & $j$ & LoRA & LoCoMo & qa1 & qa2 & qa5 \\
+\midrule
+Raw replay & 0 & no & 41.59 & 66.3 & 38.9 & 63.3 \\
+CoMem (without LoRA) & 6 & no & 32.78 & 44.6 & 22.6 & 53.9 \\
+CoMem (without LoRA) & 9 & no & 29.15 & 42.4 & 19.6 & 55.6 \\
+CoMem (without LoRA) & 12 & no & 24.52 & 33.4 & 18.0 & 60.3 \\
+CoMem & 12 & yes & 38.27 & 55.6 & 27.0 & 68.7 \\
+\bottomrule
+\end{tabular}
+\caption{Frozen-depth and same-split adaptation comparison on a matched top-12, no-chat cohort. LoCoMo is full-set Judge; qa1/qa2/qa5 are rounded BABILong task means. This raw-replay row is adapter-free, unlike the same-adapter principal RULER-B endpoint.}
+\label{tab:frozen-depth}
+\end{table}

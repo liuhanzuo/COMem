@@ -1,0 +1,180 @@
+{
+  "complete": true,
+  "records": 3000,
+  "unique_samples": 500,
+  "methods": {
+    "replay:adapter_off": {
+      "longeval_8k": {
+        "n": 100,
+        "score": 85.0
+      },
+      "longeval_16k": {
+        "n": 100,
+        "score": 83.0
+      },
+      "longeval_32k": {
+        "n": 100,
+        "score": 85.0
+      },
+      "qasper": {
+        "n": 200,
+        "score": 6.977081809027793
+      },
+      "longeval_macro": 84.33333333333333
+    },
+    "comem:adapter_off": {
+      "longeval_8k": {
+        "n": 100,
+        "score": 0.0
+      },
+      "longeval_16k": {
+        "n": 100,
+        "score": 0.0
+      },
+      "longeval_32k": {
+        "n": 100,
+        "score": 0.0
+      },
+      "qasper": {
+        "n": 200,
+        "score": 10.452656764265388
+      },
+      "longeval_macro": 0.0
+    },
+    "chunkkv:adapter_off": {
+      "longeval_8k": {
+        "n": 100,
+        "score": 73.0
+      },
+      "longeval_16k": {
+        "n": 100,
+        "score": 75.0
+      },
+      "longeval_32k": {
+        "n": 100,
+        "score": 71.0
+      },
+      "qasper": {
+        "n": 200,
+        "score": 4.876893690472505
+      },
+      "longeval_macro": 73.0
+    },
+    "replay:adapter_on": {
+      "longeval_8k": {
+        "n": 100,
+        "score": 80.0
+      },
+      "longeval_16k": {
+        "n": 100,
+        "score": 77.0
+      },
+      "longeval_32k": {
+        "n": 100,
+        "score": 76.0
+      },
+      "qasper": {
+        "n": 200,
+        "score": 4.645345789635218
+      },
+      "longeval_macro": 77.66666666666667
+    },
+    "comem:adapter_on": {
+      "longeval_8k": {
+        "n": 100,
+        "score": 71.0
+      },
+      "longeval_16k": {
+        "n": 100,
+        "score": 74.0
+      },
+      "longeval_32k": {
+        "n": 100,
+        "score": 73.0
+      },
+      "qasper": {
+        "n": 200,
+        "score": 11.368900923335982
+      },
+      "longeval_macro": 72.66666666666667
+    },
+    "chunkkv:adapter_on": {
+      "longeval_8k": {
+        "n": 100,
+        "score": 59.0
+      },
+      "longeval_16k": {
+        "n": 100,
+        "score": 62.0
+      },
+      "longeval_32k": {
+        "n": 100,
+        "score": 46.0
+      },
+      "qasper": {
+        "n": 200,
+        "score": 3.684678403021419
+      },
+      "longeval_macro": 55.666666666666664
+    }
+  },
+  "paired": {
+    "longeval_macro:comem_minus_replay:adapter_False": {
+      "delta_pp": -84.33333333333333,
+      "paired_stratified_bootstrap_95ci": [
+        -88.33333333333333,
+        -80.0
+      ]
+    },
+    "qasper:comem_minus_replay:adapter_False": {
+      "delta_pp": 3.4755749552375916,
+      "paired_stratified_bootstrap_95ci": [
+        2.1656847452903225,
+        4.8302024081483435
+      ]
+    },
+    "longeval_macro:comem_minus_chunkkv:adapter_False": {
+      "delta_pp": -73.0,
+      "paired_stratified_bootstrap_95ci": [
+        -77.99999999999999,
+        -68.0
+      ]
+    },
+    "qasper:comem_minus_chunkkv:adapter_False": {
+      "delta_pp": 5.575763073792881,
+      "paired_stratified_bootstrap_95ci": [
+        4.233755843829687,
+        6.973316992127532
+      ]
+    },
+    "longeval_macro:comem_minus_replay:adapter_True": {
+      "delta_pp": -5.0,
+      "paired_stratified_bootstrap_95ci": [
+        -11.333333333333332,
+        1.0000000000000002
+      ]
+    },
+    "qasper:comem_minus_replay:adapter_True": {
+      "delta_pp": 6.7235551337007635,
+      "paired_stratified_bootstrap_95ci": [
+        5.273531284482774,
+        8.153895850261788
+      ]
+    },
+    "longeval_macro:comem_minus_chunkkv:adapter_True": {
+      "delta_pp": 17.0,
+      "paired_stratified_bootstrap_95ci": [
+        9.666666666666668,
+        24.333333333333332
+      ]
+    },
+    "qasper:comem_minus_chunkkv:adapter_True": {
+      "delta_pp": 7.684222520314562,
+      "paired_stratified_bootstrap_95ci": [
+        6.301058436973711,
+        9.070033490390868
+      ]
+    }
+  },
+  "bootstrap": "10000 sample resamples within length for LongEval; Qasper source-document cluster resamples; seed20260913"
+}

@@ -1,0 +1,188 @@
+{
+  "complete": true,
+  "methods_complete": [
+    "comem",
+    "replay_no_adapter",
+    "without_lora"
+  ],
+  "full_n": 1150,
+  "clean_n": 1053,
+  "methods": {
+    "comem": {
+      "per_task": {
+        "narrativeqa": {
+          "full_n": 200,
+          "clean_n": 104,
+          "full_f1": 4.034798603760166,
+          "clean_f1": 4.321657031199899,
+          "change_f1": 0.286858427439733
+        },
+        "qasper": {
+          "full_n": 200,
+          "clean_n": 200,
+          "full_f1": 11.622241067306406,
+          "clean_f1": 11.622241067306406,
+          "change_f1": 0.0
+        },
+        "hotpotqa": {
+          "full_n": 200,
+          "clean_n": 200,
+          "full_f1": 11.858911723034897,
+          "clean_f1": 11.858911723034897,
+          "change_f1": 0.0
+        },
+        "2wikimqa": {
+          "full_n": 200,
+          "clean_n": 199,
+          "full_f1": 10.72149557454107,
+          "clean_f1": 10.687978947539639,
+          "change_f1": -0.033516627001430876
+        },
+        "multifieldqa_en": {
+          "full_n": 150,
+          "clean_n": 150,
+          "full_f1": 25.982713664907493,
+          "clean_f1": 25.982713664907493,
+          "change_f1": 0.0
+        },
+        "musique": {
+          "full_n": 200,
+          "clean_n": 200,
+          "full_f1": 7.839226545029396,
+          "clean_f1": 7.839226545029396,
+          "change_f1": 0.0
+        }
+      },
+      "full_macro_f1": 12.00989786309657,
+      "clean_macro_f1": 12.052121496502954
+    },
+    "replay_no_adapter": {
+      "per_task": {
+        "narrativeqa": {
+          "full_n": 200,
+          "clean_n": 104,
+          "full_f1": 3.8122735197067894,
+          "clean_f1": 3.989795967695749,
+          "change_f1": 0.17752244798895944
+        },
+        "qasper": {
+          "full_n": 200,
+          "clean_n": 200,
+          "full_f1": 11.630787752287272,
+          "clean_f1": 11.630787752287272,
+          "change_f1": 0.0
+        },
+        "hotpotqa": {
+          "full_n": 200,
+          "clean_n": 200,
+          "full_f1": 11.90054342071779,
+          "clean_f1": 11.90054342071779,
+          "change_f1": 0.0
+        },
+        "2wikimqa": {
+          "full_n": 200,
+          "clean_n": 199,
+          "full_f1": 12.339818402906975,
+          "clean_f1": 12.310461620098376,
+          "change_f1": -0.029356782808598325
+        },
+        "multifieldqa_en": {
+          "full_n": 150,
+          "clean_n": 150,
+          "full_f1": 26.090473199151713,
+          "clean_f1": 26.090473199151713,
+          "change_f1": 0.0
+        },
+        "musique": {
+          "full_n": 200,
+          "clean_n": 200,
+          "full_f1": 7.310750512764443,
+          "clean_f1": 7.310750512764443,
+          "change_f1": 0.0
+        }
+      },
+      "full_macro_f1": 12.180774467922497,
+      "clean_macro_f1": 12.205468745452558
+    },
+    "without_lora": {
+      "per_task": {
+        "narrativeqa": {
+          "full_n": 200,
+          "clean_n": 104,
+          "full_f1": 3.869140567599451,
+          "clean_f1": 4.144152677899334,
+          "change_f1": 0.27501211029988326
+        },
+        "qasper": {
+          "full_n": 200,
+          "clean_n": 200,
+          "full_f1": 10.665992360131241,
+          "clean_f1": 10.665992360131241,
+          "change_f1": 0.0
+        },
+        "hotpotqa": {
+          "full_n": 200,
+          "clean_n": 200,
+          "full_f1": 8.660011551531735,
+          "clean_f1": 8.660011551531735,
+          "change_f1": 0.0
+        },
+        "2wikimqa": {
+          "full_n": 200,
+          "clean_n": 199,
+          "full_f1": 9.645388171452245,
+          "clean_f1": 9.616547833697657,
+          "change_f1": -0.02884033775458761
+        },
+        "multifieldqa_en": {
+          "full_n": 150,
+          "clean_n": 150,
+          "full_f1": 20.510284952524476,
+          "clean_f1": 20.510284952524476,
+          "change_f1": 0.0
+        },
+        "musique": {
+          "full_n": 200,
+          "clean_n": 200,
+          "full_f1": 5.795729711093188,
+          "clean_f1": 5.795729711093188,
+          "change_f1": 0.0
+        }
+      },
+      "full_macro_f1": 9.857757885722057,
+      "clean_macro_f1": 9.898786514479605
+    }
+  },
+  "paired_macro_comparisons": {
+    "full:comem_minus_without_lora": {
+      "mean_pp": 2.1521399773745147,
+      "document_cluster_bootstrap_95ci": [
+        1.5686170882904034,
+        2.7131817433496335
+      ]
+    },
+    "full:comem_minus_replay_no_adapter": {
+      "mean_pp": -0.17087660482592726,
+      "document_cluster_bootstrap_95ci": [
+        -0.6682403067068095,
+        0.32306686248375355
+      ]
+    },
+    "clean:comem_minus_without_lora": {
+      "mean_pp": 2.153334982023349,
+      "document_cluster_bootstrap_95ci": [
+        1.5690935216023691,
+        2.718850869975554
+      ]
+    },
+    "clean:comem_minus_replay_no_adapter": {
+      "mean_pp": -0.15334724894960383,
+      "document_cluster_bootstrap_95ci": [
+        -0.7125280029253623,
+        0.3840691031711348
+      ]
+    }
+  },
+  "bootstrap": "10000 paired document-cluster resamples stratified by dataset; seed20260913",
+  "missing_other_baseline_clean_predictions": true
+}

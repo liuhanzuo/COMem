@@ -1,0 +1,17 @@
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lrrrrl@{}}
+\toprule
+Backend & Write GB/s & Fetch ms & H2D ms & Peak QPS & Outcome \\
+\midrule
+GPU resident & OOM & --- & --- & --- & 128 GiB $>$ 95 GiB \\
+CPU pinned & 139.6 & 0.81 & 1.41 & 941 & 235 GB host \\
+Local NVMe & 2.45 & 13.42 & 0.91 & 264 & 2.18 GB host \\
+Network / CEPH & 1.66 & 79.20 & 1.20 & 42 & 2.19 GB host \\
+\bottomrule
+\end{tabular}
+\caption{Persistent-store microbenchmark at 16M tokens. The same 50.3 MB top-12 pack is fetched per query; medians use seven repetitions after two warmups. Peak QPS selects the best of 1/4/16 clients and excludes model inference and retrieval.}
+\label{tab:store-tiers}
+\end{table}

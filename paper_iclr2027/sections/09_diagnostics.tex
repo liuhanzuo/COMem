@@ -1,0 +1,77 @@
+\FloatBarrier
+\section{Depth and Write-Interface Diagnostics}
+\label{app:diagnostics}
+These controls test when an intermediate semantic encoding remains usable by the upper reader: continuation checks separate implementation correctness from missing context, and depth, adaptation, and attention ablations examine fidelity at the cache boundary.
+\subsection{Matched replay and continuation}
+\input{sections/tab_matched_detail}
+The matched RULER-B control holds checkpoint, all 168 suffix-LoRA modules, example IDs, decode parameters, and selected chunk IDs, order, and tokens fixed. Across 1,500 paired examples, full replay reaches 99.19 and layer-12 replay 96.07. The reported paired-bootstrap gap is 3.12 points with 95\% interval $[2.36,3.93]$; the binary correctness comparison contains 83 full-only and one layer-12-only correct cases (exact McNemar $p=8.79\times10^{-24}$). The binary test and the fractional task-macro difference summarize different aspects of the outputs.
+
+Latency is measured on an approximately 6.5k-token pack from 16k sources, in three independent processes with three warmups and 20 reads per process. Process-level speedup ratios range from 1.402 to 1.404. Total decode medians are about 2.76--2.86 seconds; including them reduces the ratio to about 1.07--1.09. A component measurement attributes most Read savings to the transformer suffix ($1.398\times$), with unchanged LM-head time. Retrieval, index construction, reusable store/query Write, and persistent I/O are outside the Read timer.
+
+The continuous-prefix oracle runs the lower layers on the selected packed sequence for each query before resuming the suffix. It is bit-identical to full replay on the reported examples. This is a correctness check and an attribution reference; its fresh per-query prefix computation prevents the claimed cross-query lower-layer reuse. The deployable chunk-local path loses 7.50 points on pooled 8k/16k multikey examples ($n=200$, 95\% interval $[4.0,11.5]$).
+
+\subsection{Context, positions, and local repair}
+\label{sec:overlap}
+\input{sections/tab_context}
+\input{sections/tab_overlap}
+Overlap-Write is a diagnostic of lower-layer encoding context. For a chunk $x_i$ and up to $w$ preceding source tokens $\ell_i^{(w)}$, it stores
+\begin{equation}
+ H_i^{(w)}=\left.F_{0:j}([\ell_i^{(w)};x_i])\right|_{x_i},
+ \label{eq:overlap}
+\end{equation}
+retaining only states belonging to $x_i$. Thus the persistent tensor and online pack have the same shapes as at $w=0$, but Write performs extra work. An edit to the left prefix also invalidates the dependent chunk. All full-suite results use $w=0$.
+
+The context--position factorial holds selected chunk IDs, LoRA, and upper-layer causal connectivity fixed. Its full-document arm runs layers 0--11 causally over the complete formatted source and query in original positions, including unselected source tokens. It slices the sink, selected document spans, and query states from that forward into the upper-layer pack. The query is therefore document-contextual, not independently written. During generation, the lower layers retain the complete prompt KV and attend to it at document coordinates; the upper layers retain only the selected pack and generated prefix. This differs from the selected-pack continuous-prefix oracle above, and its lower-layer KV and per-token attention work grow with source length.
+
+The position factor changes upper-layer RoPE coordinates from contiguous pack positions to original document positions, including during decode. The causal mask is constructed from contiguous pack indices in both cases, so gapped RoPE coordinates do not change attention connectivity. Full-document context adds 7.5 points under local positions and 12.0 under document-origin positions; changing positions alone lowers chunk-local accuracy by 4.5 points. The $+4.5$ interaction rejects a purely additive account on these 200 examples. Because the context factor also changes query states and lower-layer decode visibility, these results do not isolate document-cache fidelity or hold all visible evidence fixed.
+
+Overlap instead changes only document-block Write. It prepends up to $w$ tokens immediately preceding the chunk in the original source, encodes the extended span causally with positions starting at zero, and discards prefix states. Prefix tokens may come from unselected chunks. Sink/query Write, lower-layer query-local decode, selected IDs, and stored tensor shapes remain fixed; encoded context does not. The $w=32$ gain is 6.0 points, with 95\% interval $[3.0,9.5]$. The FLOP ratios in Table~\ref{tab:overlap} are theoretical lower-layer Write ratios; chunk-level execution incurs larger wall-clock overhead. The separate lower-layer LoRA writer at step 2000 improves over chunk-local Write (McNemar $p=5\times10^{-4}$), with $p=0.25$ against the full-document control. This does not establish equivalence or natural-task generalization.
+
+\paragraph{Independent LongEval and natural-QA confirmation.}
+\label{app:overlap-confirmation}
+\input{sections/tab_overlap_confirmation}
+We fix $w=32$ before evaluating 300 fresh LongEval examples (100 each at 8k/16k/32k, seed 20260913 with length offsets) and all 200 Qasper examples from LongBench. Replay, $w=0$, and $w=32$ share the principal suffix adapter, input IDs, iterative BM25 top-12 selection, source order, and query segment. Chunks have 512 tokens; the final formatted-input chunk is the query. The sink is explicitly model BOS 151643 in every arm. The multikey diagnostic uses the first input token as its sink when the tokenizer has no BOS ID. This sink difference and the independently sampled inputs prevent item-paired differences across tasks. Generation is greedy, plain-text, and capped at 16 tokens for LongEval and 128 for Qasper. All outputs reached these caps. Qasper uses the best token F1 over reference answers, not a judge.
+
+Table~\ref{tab:overlap-confirmation} does not reproduce the multikey repair. LongEval macro accuracy falls from 72.67 to 62.33, a paired $-10.33$ points (95\% CI $[-16.33,-4.33]$, resampling within length); replay scores 77.67. There are 28 overlap-only correct and 59 baseline-only correct examples. Qasper changes from 11.37 to 10.76 F1, with a paired difference of $-0.61$ ($[-1.43,0.21]$); these low, capped-output scores do not support preserved general QA capability. Four Slurm B300 workers evaluate disjoint samples, saving 1,500 outputs. An independent CPU pass checks sample support, generated-ID decoding, selected IDs, and every score. Before evaluation, each worker verifies adapter-off replay against stock logits and cached generation against recomputation.
+
+An exploratory boundary analysis finds improvement when the target record begins within a chunk's first 32 positions (20 examples: 45 to 80 accuracy), but degradation on the 290 records that do not cross a chunk boundary (74.48 to 63.10). These overlapping, small subgroups do not establish a mechanism. The overall negative result rules out treating short overlap as a general repair under this protocol.
+
+\paragraph{Quality and Write-inclusive cost on the same examples.}
+\label{app:overlap-cost}
+\input{sections/tab_overlap_cost}
+Table~\ref{tab:overlap-cost} uses the first five examples from each LongEval length and from Qasper, fixed before observing quality, on RTX 5090. All arms share the principal adapter and selected evidence. Each of three independent processes runs one warmup and three formal repetitions per example and arm: 540 formal requests and 180 warmups, with 20 unique quality examples. Software and model placement follow Appendix~\ref{app:local-infra}; the allocator cap for this experiment is 26.08 GB, below the 28 GB budget. No OOM occurs. Every successful request is checked for 128 generated IDs and consistent timing components.
+
+Each request starts from pretokenized CPU inputs and prepares a new CPU-pinned store. CoMem writes every source chunk, then selects, fetches, writes the sink/query, prefills the suffix, and generates 128 tokens without stopping at EOS. Replay prepares token IDs and processes the same selected pack through all layers. TTFT includes selection, fetch, sink/query Write, and prefill; online time adds generation, and E2E additionally includes document preparation. Replay token preparation is charged to E2E; it has no transformer document Write. Loading, tokenization, external I/O, and teardown are excluded. Local quality uses the first 16 generated tokens for LongEval and 128 for Qasper, truncated at the first EOS. Predictions and scores agree across local repetitions; device-dependent predictions cause small Qasper score differences from the B300 subset, so quality here is scored locally.
+
+Relative to $w=0$, overlap raises document Write by 17.9--19.4\% and E2E by 1.1--4.2\% across the four cells. TTFT changes by less than 0.4\% in either direction. Stored residual bytes are identical: 64/128/256 MiB at the three LongEval lengths and 20--32 MiB for these Qasper sources, excluding the retrieval index. GPU peaks are at most 18.92 GB across all arms. CoMem reduces TTFT relative to replay, but charging full Write makes its 32k E2E longer (7.475 versus 6.900 seconds). These five-example cells expose request costs and local quality together; their quality rankings do not replace the complete 500-example evaluation or establish a general serving frontier.
+
+\subsection{Split depth and suffix adaptation}
+\input{sections/tab_frozen_depth}
+\input{sections/tab_multidepth}
+\input{sections/tab_adapter_detail}
+The matched depth-ablation cohort separates selection from residual reuse. At $j=0$, full replay of the selected pack already reaches 41.59 LoCoMo Judge. Frozen deeper splits reduce that score. Within this cohort at $j=12$, distillation recovers 13.75 LoCoMo points and 22.2, 9.0, and 8.4 BABILong qa1, qa2, and qa5 points. BABILong task means are rounded; the raw-cell $j=0$ macro is 56.14.
+
+The multi-depth experiment trains a separate rank-32 suffix adapter for each split with the same data order, seed, steps, optimizer, and KL recipe. Adapter spans and parameter counts vary. The principal $j=12$ point prepays one third of the 36 blocks; shallower splits retain more fidelity at a higher Read cost, whereas $j=18$ loses substantial accuracy. This is a measured operating choice, not an analytically optimal split. The points are not an equal-training-compute causal curve. Gap intervals are paired against replay with each depth's own adapter; all reported McNemar tests have $p\leq3.05\times10^{-5}$. The $j=12$ fixed-pack Write measurement is unavailable.
+
+\subsection{Full-vocabulary distillation validation}
+\label{app:distillation-validation}
+\input{sections/tab_distillation_validation}
+We evaluate the principal adapter on all 50 books in the official PG-19 validation split, whose book IDs do not intersect the 64 training books. With seed 20260913, we sample two non-overlapping blocks per book before evaluating model outputs. Each block supplies 4,096 input tokens and one additional token used only as the final next-token label. We prepend BOS 151643 and evaluate the last 512 input positions, giving 51,200 predictions per method. The teacher processes the complete input causally with its adapter disabled. Both students use independent lower-layer Write for each 512-token block, sink, and query, followed by the packed causal suffix. The adapter is enabled only for CoMem. These teacher-forced measurements use the training interface without retrieval or parameter updates.
+
+The teacher's top-64 support retains 94.68\% probability mass on average (95\% book-bootstrap interval $[94.13,95.21]$). Coverage is not uniformly high: its token-level tenth and first percentiles are 83.18\% and 53.23\%. Student mass on the same support increases from 93.20\% to 94.35\% with adaptation. The conditional training objective falls from .414 to .275, while full-vocabulary forward KL falls from .442 to .304 and reverse KL from .454 to .287 (Table~\ref{tab:distillation-validation}). The paired forward-KL change is $-.138$ ($[-.147,-.131]$), and next-token NLL changes by $-.101$ ($[-.111,-.092]$). Intervals use 10,000 paired resamples of books, keeping both windows and all their token positions together.
+
+Thus the measured improvement extends beyond the renormalized top-64 objective. It does not make that objective equivalent to full-vocabulary distillation: average teacher mass outside the support is 5.32\%, with a larger tail at uncertain positions. This validation measures language-model continuation on unseen books, rather than retrieval quality, free-generation QA, or variation across independently trained adapters.
+
+\subsection{Selection, chunk interaction, and chunk size}
+\input{sections/tab_selector_detail}
+\input{sections/tab_dense_retrieval}
+\input{sections/tab_attention_chunk}
+The single-pass selector table reports the peak over tested $k$ values and is distinct from the fixed-budget iterative flagship. Oracle selection is defined for lexical needles, not variable-tracking chains. A three-round CPU lookup at 128k takes 188.8\,ms in a separate microbenchmark, versus 41.0\,ms for one-shot BM25; it adds no model forward but is not constant-time.
+
+In the attention ablation, the final query can attend to all chunks in both conditions. The change is whether the context chunks can attend across chunk boundaries before query readout. Full cross-chunk attention helps most on multifact tasks. The chunk-size sweep changes both pack length and accuracy; its uncached packed-step timing intentionally recomputes the pack and is not deployed KV-cached decode. These accuracy entries are point estimates, not a multi-seed ranking.
+
+\subsection{Probes as motivation}
+\label{app:semantic-probes}
+On SST2, WiC, and RTE, the reported procedure extracts layer features from a fixed stratified pool of up to 3,000 training examples, then fits L2 logistic regressions on five independent 60/20/20 train/dev/test splits. Features are standardized and $C\in\{0.1,1,10\}$ is selected on development data. For accuracy $a(l)$, the knee is $\min\{l:a(l)\geq0.98\max_{l'}a(l')\}$. Native readout applies the model's final normalization and LM head at each layer with fixed verbalizers.
+
+Lexical uni/bi-grams, token length, random labels, majority class, and balanced training are controls. SST2 probe accuracy peaks near 0.90, compared with approximately 0.71 for lexical features, 0.56 for position/majority, and 0.54 for random labels. WiC and RTE have lower selectivity and wider intervals. Layerwise probe analyses use five stratified splits for Qwen and OLMo plus matched-support Llama SST2 results; Student-$t$ intervals aggregate task--split knee estimates. These measurements concern readout compatibility, not where understanding is completed or causally required.

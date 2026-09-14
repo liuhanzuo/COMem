@@ -1,0 +1,32 @@
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+Method & Quality & Write (ms) & TTFT (ms) & Online (s) & E2E (s) & GPU (GB) \\
+\midrule
+\multicolumn{7}{@{}l}{\textit{LongEval 8k ($n=5$)}} \\
+Replay & 80.00 & 0.0 & 860.0 & 6.854 & 6.855 & 18.89 \\
+CoMem & 100.00 & 351.1 & 647.7 & 6.032 & 6.383 & 18.59 \\
+CoMem ($w=32$) & 80.00 & 419.2 & 647.1 & 6.035 & 6.456 & 18.59 \\
+\addlinespace[3pt]
+\multicolumn{7}{@{}l}{\textit{LongEval 16k ($n=5$)}} \\
+Replay & 80.00 & 0.0 & 868.9 & 6.861 & 6.862 & 18.90 \\
+CoMem & 60.00 & 706.1 & 655.3 & 6.056 & 6.767 & 18.59 \\
+CoMem ($w=32$) & 40.00 & 843.3 & 653.2 & 6.070 & 6.916 & 18.59 \\
+\addlinespace[3pt]
+\multicolumn{7}{@{}l}{\textit{LongEval 32k ($n=5$)}} \\
+Replay & 100.00 & 0.0 & 876.9 & 6.899 & 6.900 & 18.92 \\
+CoMem & 20.00 & 1416.6 & 661.2 & 6.071 & 7.475 & 18.62 \\
+CoMem ($w=32$) & 80.00 & 1687.9 & 662.7 & 6.071 & 7.788 & 18.62 \\
+\addlinespace[3pt]
+\multicolumn{7}{@{}l}{\textit{Qasper ($n=5$)}} \\
+Replay & 16.36 & 0.0 & 537.4 & 5.556 & 5.556 & 18.26 \\
+CoMem & 21.48 & 154.2 & 422.6 & 5.344 & 5.497 & 18.06 \\
+CoMem ($w=32$) & 16.76 & 181.8 & 423.8 & 5.368 & 5.559 & 18.06 \\
+\bottomrule
+\end{tabular}
+\caption{Paired quality and cost on RTX 5090 for the first five prespecified examples per task/length. Both CoMem variants use $j=12$, with $w=0$ unless indicated; replay uses the same selected tokens at $j=0$. Quality is local accuracy or Qasper F1 (percent), using each task\textquotesingle s generation limit. Online and E2E force 128 output tokens; E2E additionally includes full-document preparation and Write. Latencies are medians of three process medians, each over five examples and three formal repetitions. GPU is maximum allocated memory including weights. These 20 examples are a timing subset, not the full quality evaluation in Table~\ref{tab:overlap-confirmation}.}
+\label{tab:overlap-cost}
+\end{table}

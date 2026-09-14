@@ -1,0 +1,33 @@
+\begin{table}[htbp]
+\centering
+\caption{\textbf{Cross-benchmark accuracy under the plain-text protocol.} Both CoMem variants use split depth $j=12$. All scores are on a 0--100 scale ($\uparrow$). Avg. is the descriptive, unweighted mean of the five benchmark scores. Best and second-best values in each column are \textbf{bold} and \underline{underlined}.}
+\label{tab:accuracy}
+\vspace{4pt}
+\small
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.16}
+\begin{tabularx}{\linewidth}{>{\hsize=2.05\hsize\linewidth=\hsize\raggedright\arraybackslash}X*{6}{>{\hsize=.825\hsize\linewidth=\hsize\raggedleft\arraybackslash}X}}
+\toprule
+\multirow{2}{*}{\textbf{Method}} & \multicolumn{5}{c}{\textbf{Benchmark scores}} & \multirow{2}{*}{\textbf{Avg.}}\\
+\cmidrule(lr){2-6}
+ & RULER & LongEval & LongBench & BABILong & LoCoMo & \\
+\midrule
+KV-Direct & \underline{78.80} & \underline{65.2} & \textbf{12.17} & \textbf{63.00} & \underline{34.59} & \underline{50.75}\\
+InfLLM & 77.83 & 21.6 & 11.86 & \underline{59.52} & 22.21 & 38.60\\
+StreamingLLM & 23.37 & 30.8 & 11.11 & 48.14 & 25.63 & 27.81\\
+MemoryLLM$^{\dagger}$ & 16.55 & 13.6 & 9.01 & 30.00 & 16.11 & 17.05\\
+HCache-style$^{\ddagger}$ & 3.73 & 0.0 & 9.20 & 33.71 & 8.11 & 10.95\\
+\midrule
+CoMem (without LoRA) & 16.87 & 0.2 & 9.86 & 37.48 & 24.52 & 17.78 \\
+\rowcolor{resultshade}
+\textbf{CoMem} & \textbf{97.05} & \textbf{69.0} & \underline{12.01} & 50.43 & \textbf{38.27} & \textbf{53.35}\\
+\bottomrule
+\end{tabularx}
+\par\vspace{3pt}
+\begin{minipage}{\linewidth}
+\footnotesize
+RULER: common 15-cell macro; LongEval: 8k--128k; LongBench: six-dataset macro F1; BABILong: three tasks over seven lengths; LoCoMo: Judge over 1,986 items. Replay controls are in Appendix~\ref{app:diagnostics}. KV-Direct is the full-context recomputation reference, unextended beyond 40,960 tokens; baseline implementations are specified in Appendix~\ref{app:protocol}.\\[1pt]
+$^{\dagger}$Different backbone. $^{\ddagger}$Retrieval-free HCache-style checkpoint, distinct from the same-split adapter control and native HCache.
+
+\end{minipage}
+\end{table}

@@ -1,0 +1,72 @@
+\begin{table}[htbp]
+\centering
+\caption{\textbf{Infrastructure cost across three measurement settings.} Methods are compared within each panel; timing boundaries and hardware differ across panels. Lower latency and peak memory are better ($\downarrow$); higher speedup is better ($\uparrow$). Bold marks better results where both methods complete within each source length and panel.}
+\label{tab:infra}
+\vspace{4pt}
+\small
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{1.15}
+\begin{tabularx}{\linewidth}{ll*{5}{>{\raggedleft\arraybackslash}X}}
+\toprule
+\multicolumn{7}{l}{\textbf{(a) RTX 5090}\quad Full-source Dense; 28 GB memory cap}\\[2pt]
+\multirow{2}{*}{\textbf{Source}} & \multirow{2}{*}{\textbf{Method}} & \multicolumn{3}{c}{\textbf{Latency (ms)} $\downarrow$} & \multicolumn{2}{c}{\textbf{Peak GPU (GB)} $\downarrow$}\\
+\cmidrule(lr){3-5}\cmidrule(l){6-7}
+ & & Prefill & TTFT & E2E$_{128}$ & Prefill & TTFT\\
+\midrule
+8k & Dense & 1194.4 & 1165.9 & 7987.6 & 19.66 & 19.66\\
+\rowcolor{resultshade}
+ & \textbf{CoMem} & \textbf{607.1} & \textbf{652.6} & \textbf{6331.6} & \textbf{18.68} & \textbf{18.71}\\
+\midrule
+16k & Dense & 2684.8 & 2681.3 & 12093.9 & 22.49 & 22.49\\
+\rowcolor{resultshade}
+ & \textbf{CoMem} & \textbf{606.5} & \textbf{648.0} & \textbf{6407.2} & \textbf{18.68} & \textbf{18.71}\\
+\midrule
+32k & Dense & OOM & OOM & OOM & OOM & OOM\\
+\rowcolor{resultshade}
+ & \textbf{CoMem} & 611.8 & 667.5 & 7026.1 & 18.68 & 18.71\\
+\midrule
+128k & Dense & OOM & OOM & OOM & OOM & OOM\\
+\rowcolor{resultshade}
+ & \textbf{CoMem} & 620.3 & 768.6 & 11426.8 & 18.68 & 18.71\\
+\bottomrule
+\end{tabularx}
+\par\vspace{7pt}
+\begin{minipage}[t]{0.485\linewidth}
+\centering
+\setlength{\tabcolsep}{2pt}
+\begin{tabularx}{\linewidth}{l*{3}{>{\raggedleft\arraybackslash}X}}
+\toprule
+\multicolumn{4}{l}{\textbf{(b) B300}\quad 128k source}\\
+\multicolumn{4}{l}{\textit{Store-ready prefill}}\\[2pt]
+\textbf{Method} & \textbf{Latency} & \textbf{Peak GPU} & \textbf{Speedup}\\
+ & (ms) $\downarrow$ & (GB) $\downarrow$ & $\uparrow$\\
+\midrule
+Dense & 15,919 & 62.03 & $1.00\times$\\
+\rowcolor{resultshade}
+\textbf{CoMem} & \textbf{194.8} & \textbf{18.71} & $\mathbf{81.7}\times$\\
+\bottomrule
+\end{tabularx}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.485\linewidth}
+\centering
+\setlength{\tabcolsep}{2pt}
+\begin{tabularx}{\linewidth}{l*{3}{>{\raggedleft\arraybackslash}X}}
+\toprule
+\multicolumn{4}{l}{\textbf{(c) B200}\quad 128k source}\\
+\multicolumn{4}{l}{\textit{Write-inclusive pipeline}}\\[2pt]
+\textbf{Method} & \textbf{Latency} & \textbf{Peak GPU} & \textbf{Speedup}\\
+ & (ms) $\downarrow$ & (GB) $\downarrow$ & $\uparrow$\\
+\midrule
+Dense & 6,035 & 89.39 & $1.00\times$\\
+\rowcolor{resultshade}
+\textbf{CoMem} & \textbf{2,202} & \textbf{18.54} & $\mathbf{2.74}\times$\\
+\bottomrule
+\end{tabularx}
+\end{minipage}
+\par\vspace{4pt}
+\begin{minipage}{\linewidth}
+\footnotesize
+\textbf{(a)} Dense processes the full source; CoMem resumes from cached $j=12$ residual states of 12 selected chunks. Both share the adapter. The 28 GB CUDA allocator cap includes weights, KV, and temporaries; OOM denotes an actual failure. Prefill starts GPU-ready; TTFT adds transfer and CoMem retrieval/query Write. E2E$_{128}$ includes document preparation and 128 output tokens. Model load, tokenization, and external I/O are excluded. Three processes and three documents; protocol and OOM attempts are in Appendix~\ref{app:local-infra}. GPU peaks are allocated bytes including weights (decimal GB); the adapter is shared with Table~\ref{tab:accuracy}; these cost inputs are unscored.\\[1pt]
+\textbf{(b)} Same adapter; full prompt versus cached residual states at $j=12$. Document/query Write and fetch excluded; three processes, three documents, three repeats each. \textbf{(c)} Same adapter; document Write included, index construction and external I/O excluded. Full protocols: Appendix~\ref{app:systems}. Persistent storage is separate: residuals 8 KiB/token, token IDs 4--8 B/token, full KV 144 KiB/token.
+\end{minipage}
+\end{table}

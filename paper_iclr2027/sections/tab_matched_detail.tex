@@ -1,0 +1,16 @@
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+Path & RULER B & MK 8/16k & Read ms & p10 & p90 \\
+\midrule
+Raw replay $j=0$ & 99.19 & 100.0 & 931.9 & 931.6 & 942.0 \\
+Chunk-local $j=12$ & 96.07 & 92.5 & 664.4 & 663.8 & 667.1 \\
+Continuous-prefix oracle & 99.19 & 100.0 & --- & --- & --- \\
+\bottomrule
+\end{tabular}
+\caption{Matched replay and Write-side attribution. The oracle freshly computes the selected sequence's lower-layer states per query and is not a reusable Write. Quality uses the paired 1,500-example Cohort B; MK denotes the 200-example multikey subset. Read uses a separate fixed pack from 16k sources with the same adapter and excludes retrieval, reusable Write, and I/O.}
+\label{tab:matched-detail}
+\end{table}

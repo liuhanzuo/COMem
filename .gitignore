@@ -4,11 +4,9 @@
 *.safetensors
 *.ckpt
 
-# data / results / outputs
-# NOTE: the glob is load-bearing. This repo is CODE-ONLY — result JSON/CSV must
-# never enter git. `*_results/` catches new benchmark dirs (bench_results/,
-# infbench_results/, ...) that the literal list below would otherwise miss and
-# that could be `git add`-ed by accident.
+# Raw data / predictions / execution outputs stay local. Small aggregate values
+# used in the manuscript and plots live explicitly in paper_iclr2027/.
+# `*_results/` also catches newly named benchmark output directories.
 *_results/
 data/
 outputs/
@@ -46,6 +44,34 @@ venv/
 *.zip
 paper/_deprecated/
 missfont.log
+
+# The current manuscript and its vector figure sources are published artifacts.
+!paper_iclr2027/main.pdf
+!paper_iclr2027/figures/*.pdf
+paper_iclr2027/build/
+
+# Supplementary experiment scripts are tracked; their generated data are not.
+exp/**/data/
+exp/**/results/
+exp/**/workloads/
+exp/**/smoke/
+exp/**/vendor/
+exp/**/quality/
+exp/**/cost/
+exp/**/kv_quality/
+exp/**/kv_cost/
+exp/**/clean_quality/
+exp/**/distillation/
+exp/**/*_smoke/
+exp/**/*.jsonl
+exp/**/*.jsonl.gz
+exp/**/*summary.json
+exp/**/sample_summary.json
+exp/**/workloads.json
+exp/**/adapter/
+exp/**/checkpoint*/
+exp/**/*.tar
+exp/**/*.tar.gz
 
 # misc
 .DS_Store

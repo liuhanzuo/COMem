@@ -1,0 +1,19 @@
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+Store & NIAH / VT recall & NIAH / VT score & Read tokens & BM25 ms \\
+\midrule
+128k & 1.00 / 1.00 & 100 / 18 & 6,211 / 6,463 & 80 / 20 \\
+256k & 1.00 / 1.00 & 100 / 34 & 6,209 / 6,463 & 164 / 39 \\
+512k & 1.00 / 1.00 & 100 / 40 & 6,209 / 6,464 & 328 / 81 \\
+1M & 1.00 / 1.00 & 100 / 54 & 6,209 / 6,463 & 697 / 170 \\
+2M & 1.00 / 1.00 & 90 / 38 & 6,211 / 6,463 & 1,407 / 357 \\
+4M & 1.00 / 1.00 & 100 / 34 & 6,208 / 6,463 & 2,852 / 725 \\
+\bottomrule
+\end{tabular}
+\caption{Fixed top-12 store scaling. Slash-separated entries are single-evidence NIAH / five-link variable tracking. Evidence recall uses $n=20$ and generated scores $n=10$. Model Read remains bounded while retrieval latency grows; perfect recall does not guarantee correct reasoning.}
+\label{tab:store-scale}
+\end{table}

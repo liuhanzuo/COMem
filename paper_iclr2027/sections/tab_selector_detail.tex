@@ -1,0 +1,22 @@
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}llrrrr@{}}
+\toprule
+Task & Length & BM25 & Recency & Reader attn. & Oracle \\
+\midrule
+Single needle & 8k & 100 & 100 & 100 & 100 \\
+Single needle & 16k & 100 & 100 & 100 & 100 \\
+Single needle & 32k & 100 & 82 & 73 & 100 \\
+Multikey & 8k & 99 & 98 & 97 & 100 \\
+Multikey & 16k & 99 & 88 & 90 & 100 \\
+Multikey & 32k & 99 & 54 & 60 & 100 \\
+Variable tracking & 8k & 99.4 & 99.2 & 99.8 & N/A \\
+Variable tracking & 16k & 92.6 & 92.4 & 92.4 & N/A \\
+Variable tracking & 32k & 32.0 & 41.2 & 27.8 & N/A \\
+\bottomrule
+\end{tabular}
+\caption{Single-pass selector sweep ($n=100$, no chat), reporting the peak over $k\in\{4,8,12,16,24\}$. It differs from fixed-budget iterative retrieval. Oracle is undefined for variable-tracking chains.}
+\label{tab:selector-detail}
+\end{table}

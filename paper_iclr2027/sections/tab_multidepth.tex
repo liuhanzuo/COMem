@@ -1,0 +1,17 @@
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+$j$ & Params (M) & RULER B & Gap [95\% CI] & LoCoMo & Read ms & Write ms \\
+\midrule
+6 & 72.745 & 98.29 & 0.91 [0.49, 1.39] & 40.38 & 830.3 & 133.4 \\
+9 & 65.470 & 97.55 & 1.65 [1.04, 2.31] & 39.02 & 748.3 & 196.9 \\
+12 & 58.196 & 96.07 & 3.12 [2.36, 3.93] & 38.27 & 664.4 & --- \\
+18 & 43.647 & 55.41 & 43.79 [41.77, 45.85] & 28.65 & 499.5 & 390.3 \\
+\bottomrule
+\end{tabular}
+\caption{Separately distilled deployment points. The respective Read speedups are $1.166/1.273/1.403/1.807\times$ against full replay with each depth's own adapter. The RULER gap is full replay minus deployment on paired Cohort B. Adapter spans and training parameter counts vary; the $j=12$ fixed-pack Write value is unavailable. LoCoMo uses all 1,986 questions.}
+\label{tab:multidepth}
+\end{table}

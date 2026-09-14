@@ -1,0 +1,35 @@
+\FloatBarrier
+\section{Detailed Benchmark Results}
+\label{app:benchmarks}
+\subsection{Evaluation without LoRA}
+\label{app:frozen-recheck}
+CoMem without LoRA in Table~\ref{tab:accuracy} evaluates Qwen3-8B at $j=12$ with the suffix adapter disabled. The backbone remains bf16 with native RoPE, independent 512-token chunks, iterative BM25 top-12 with hop width four and three rounds, a BOS sink, and no chat template. Inference follows the released CoMem prompt path: the last chunk of the full formatted prompt is the query. Generation limits match the recorded frozen protocol in Table~\ref{tab:eval}. These accuracy-only runs use the B300 Slurm pool, Python 3.12.7, PyTorch 2.14.0 with CUDA 13.0, and Transformers 5.16.1; their wall times are not infrastructure results.
+
+RULER uses the released generator with seed 42, \texttt{PYTHONHASHSEED=0}, and a saved PG19 prose haystack for single-2 and multikey-1; variable tracking uses its noise and in-context-example generator. LongEval uses seed 1234 with its CRC32 length offsets. Adapter and no-adapter synthetic results use independent runs; their aggregate difference is not an item-paired estimate. LongBench uses all 1,150 examples in the six public test files, and BABILong uses the complete official 21-cell grid with its original templates and scorer. Inputs, selected IDs, and predictions are saved; four independent GPU workers evaluate disjoint indices. Before evaluation, each verifies the $j=0$ path against stock logits and cached $j=12$ generation against recomputation. An independent CPU pass checks every score and the complete sample support.
+
+The no-adapter LoCoMo Judge score is 24.52 over all 1,986 questions. The benchmark tables below report the corresponding $j=12$ configuration throughout; Table~\ref{tab:frozen-depth} separately studies split depth.
+
+\subsection{RULER cohorts and positional scaling}
+\input{sections/tab_ruler_a}
+\input{sections/tab_ruler_b}
+\input{sections/tab_equal_budget}
+All RULER tables use official \texttt{string\_match\_all}; Cohorts A and B retain their distinct single-needle tasks. Unextended KV-Direct evaluates full context without YaRN, so beyond-native cells are stress references. The factor-4 YaRN control has an effective 163,840-token window. Its strong 128k single-needle performance rules out a general claim that only CoMem works at that length. CoMem's stronger variable tracking is a task-specific result. The same-budget StreamingLLM comparison uses the same nominal read budget and scorer, but the examples are not treated as item-paired.
+
+\subsection{LongEval, BABILong, and LongBench}
+\input{sections/tab_longeval_detail}
+\input{sections/tab_babilong_detail}
+\input{sections/tab_longbench_detail}
+LongEval exposes substantial representation error after evidence selection. CoMem without LoRA permits 48 generated tokens instead of 16; both exceed the single-number answer length, but the generation settings are not identical. BABILong qa1 and qa2 favor full context within its native range; qa5 instead favors the distilled CoMem mean. MemoryLLM uses its released Llama-3-8B-chat checkpoint throughout the uniform no-chat tables and is an external reference rather than a same-backbone control.
+
+The LLoCO reference uses LLaMA-2-7B AutoCompressor, released per-domain supervised LoRAs, fp16, and native task prompts \citep{lloco}. Its available three-dataset mean cannot be compared with the six-dataset LongBench macro. It is displayed separately to preserve its different support and adaptation boundary.
+
+\subsection{Dialogue memory}
+\input{sections/tab_locomo_detail}
+\input{sections/tab_locomo_categories}
+LoCoMo's main semantic metric is the full-set Judge score. F1 and substring accuracy are lexical diagnostics. The same-$j$ adapter effect appears in Table~\ref{tab:frozen-depth}; the full-context comparison combines selection and adaptation with depth reuse. Appendix~\ref{app:stats} provides judge decisions, uncertainty definitions, and the prompt-dependent reversal.
+
+\subsection{Portability to other backbones}
+\input{sections/tab_hy3_detail}
+The study reports exploratory adapter-free sweeps across six Qwen3 sizes and Qwen3-30B-A3B. They change split, architecture, and task and do not establish a scaling law or matched replication of the principal frontier. Their unreported per-cell values are not reconstructed here.
+
+The Hy3 study uses an 80-layer sparse MoE with 192 experts, top-eight routing plus one shared expert, approximately 597\,GB bf16 weights, and a 262,144-token native window \citep{hunyuan}. It is sharded across eight GPUs. Splitting a contiguous forward at $j\in\{0,1,40,80\}$ and resuming its suffix gives zero maximum logit deviation in the reported self-test, including routing. This verifies implementation portability for a compatible forward, not independent-chunk fidelity. At $j=32$, separate self-distillation improves the PG-19 readout metrics in Table~\ref{tab:hy3}; the bounded-read needle results use $n=50$, BM25 top-eight, and the distilled adapter.

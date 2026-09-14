@@ -1,0 +1,23 @@
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lrrrrrrr@{}}
+\toprule
+Method & NQA & Qasper & Hotpot & 2Wiki & MultiF. & Musique & Macro \\
+\midrule
+Replay $j=0$ & 3.81 & 11.63 & 11.90 & 12.34 & 26.09 & 7.31 & 12.18 \\
+CoMem & 4.03 & 11.62 & 11.86 & 10.72 & 25.98 & 7.84 & 12.01 \\
+CoMem (without LoRA) & 3.87 & 10.67 & 8.66 & 9.65 & 20.51 & 5.80 & 9.86 \\
+KV-Direct & 3.70 & 11.82 & 12.68 & 12.03 & 25.30 & 7.49 & 12.17 \\
+InfLLM & 2.99 & 11.35 & 12.08 & 12.50 & 25.33 & 6.94 & 11.86 \\
+StreamingLLM & 3.49 & 11.64 & 11.02 & 12.19 & 22.42 & 5.88 & 11.11 \\
+MemoryLLM$^\dagger$ & 3.13 & 8.46 & 8.76 & 10.27 & 17.43 & 5.98 & 9.01 \\
+HCache-style$^{\S}$ & 2.56 & 10.71 & 7.33 & 9.19 & 20.39 & 5.05 & 9.20 \\
+\midrule
+LLoCO$^\ddagger$ & 24.21 & 24.45 & 44.24 & --- & --- & --- & 30.97$^\ddagger$ \\
+\bottomrule
+\end{tabular}
+\caption{Both CoMem variants use $j=12$. Official LongBench token F1; the unmarked macro averages six datasets. NQA is NarrativeQA and MultiF. is MultiFieldQA-en. Replay and both CoMem variants share all 1,150 examples, selected chunks, prompts, and generation limits; replay has no adapter. Their clean-subset results use the same predictions (Table~\ref{tab:clean-longbench}). $^\dagger$Different MemoryLLM backbone. $^\ddagger$LLoCO uses native prompts and supervised per-domain adapters on a different backbone; its mean covers only three datasets and is not directly comparable. $^{\S}$HCache-style uses a retrieval-free checkpoint distinct from the same-split adapter diagnostic.}
+\label{tab:longbench-detail}
+\end{table}

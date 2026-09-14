@@ -1,0 +1,19 @@
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+Method & Cat. 1 & Cat. 2 & Cat. 3 & Cat. 4 & Cat. 5 & Overall \\
+\midrule
+CoMem & 26.95 & 19.00 & 30.21 & 69.32 & 2.47 & 38.27 \\
+KV-Direct & 24.11 & 18.69 & 25.00 & 62.19 & 2.69 & 34.59 \\
+StreamingLLM & 22.70 & 11.21 & 23.96 & 42.21 & 6.95 & 25.63 \\
+InfLLM & 18.44 & 14.33 & 25.00 & 33.89 & 7.62 & 22.21 \\
+MemoryLLM & 15.60 & 8.72 & 15.63 & 27.47 & 0.45 & 16.11 \\
+HCache-style$^{\ddagger}$ & 6.74 & 2.49 & 9.38 & 14.27 & 1.12 & 8.11 \\
+\bottomrule
+\end{tabular}
+\caption{LoCoMo category scores. Category denominators are 282/321/96/841/446. The final column is item-weighted over all categories rather than their unweighted mean. $^{\ddagger}$HCache-style uses a retrieval-free checkpoint distinct from the same-split adapter diagnostic.}
+\label{tab:locomo-categories}
+\end{table}

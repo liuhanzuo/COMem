@@ -1,0 +1,35 @@
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Task & Full causal & Block diagonal & Difference \\
+\midrule
+RULER single & 100 / 100 & 100 / 96 & 0 / +4 \\
+RULER multikey & 96 / 94 & 60 / 32 & +36 / +62 \\
+BABILong qa2 & 36 / 20 & 17 / 13 & +19 / +7 \\
+BABILong qa5 & 78 / 69 & 78 / 55 & 0 / +14 \\
+\bottomrule
+\end{tabular}
+\caption{Chunk interaction at 8k/16k. RULER uses $n=50$, BABILong $n=100$, with identical top-12 retrieval. The query sees all chunks in both arms; the ablation removes attention between context chunks.}
+\label{tab:attention-detail}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+Chunk tokens & Read tokens & Uncached s/token & 8k & 16k & 32k & 64k \\
+\midrule
+128 & 1,665 & 0.19 & 91.0 & 90.0 & 81.0 & 85.0 \\
+256 & 3,329 & 0.37 & 80.0 & 90.0 & 90.0 & 94.0 \\
+512 & 6,657 & 0.72 & 89.0 & 95.0 & 97.0 & 94.0 \\
+1024 & 13,313 & 1.60 & 100.0 & 89.0 & 92.0 & 94.0 \\
+\bottomrule
+\end{tabular}
+\caption{Chunk-size diagnostic on RULER multikey ($n=100$, no chat). The packed-step timer reruns the pack and must not be read as deployed KV-cached decode latency. Accuracy entries are point estimates.}
+\label{tab:chunk-size}
+\end{table}

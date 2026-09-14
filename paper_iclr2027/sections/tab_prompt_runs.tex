@@ -1,0 +1,17 @@
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+Metric & Seed 42 & Seed 1 & Seed 2 & Mean & SD \\
+\midrule
+RULER 9-cell macro & 98.80 & 99.42 & 98.76 & 98.99 & .37 \\
+BABILong 9-cell macro & 38.44 & 40.33 & 41.44 & 40.07 & 1.52 \\
+RULER MK 3-length mean & 96.67 & 98.67 & 96.67 & 97.33 & 1.15 \\
+BABILong qa5 3-length mean & 66.00 & 69.33 & 71.00 & 68.78 & 2.55 \\
+\bottomrule
+\end{tabular}
+\caption{Seed-plus-effective-batch sensitivity. Seed 42 uses effective batch eight; seeds one and two use batch three with matched examples seen. These settings differ from the principal batch-one recipe. RULER uses three tasks at 32k/64k/128k, $n=50$ per cell; BABILong uses three tasks at 4k/16k/32k, $n=100$. SD is sample SD of three run-level macros. This is not pure seed variance or the principal 15-cell RULER cohort.}
+\label{tab:run-robustness}
+\end{table}

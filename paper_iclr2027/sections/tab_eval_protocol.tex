@@ -1,0 +1,18 @@
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lll@{}}
+\toprule
+Benchmark & Support / aggregation & Generation \\
+\midrule
+RULER & 15 cells, 100/cell; cell macro & 48; VT 60 \\
+LongEval & 100/length; five-length macro & 16; without LoRA 48 \\
+LongBench & 1,150 examples; six-dataset F1 macro & 32/64/128 \\
+BABILong & 21 cells, 100/cell; cell macro & 20 \\
+LoCoMo & 1,986 items; item-weighted Judge & 48; scale study 512 \\
+\bottomrule
+\end{tabular}
+\caption{Evaluation supports and maximum generated tokens. RULER uses official case-insensitive string matching; BABILong uses official answer comparison with task labels. LongEval extracts the first numeric answer, LongBench uses official multi-reference token F1, and LoCoMo combines semantic judging with local abstention scoring. RULER, LongBench, and BABILong use seed 42; LongEval uses seed 1234. Adapted runs use eight shards for RULER/LongEval and four for BABILong/LoCoMo. The three paired LongBench configurations and no-adapter runs use four shards throughout.}
+\label{tab:eval}
+\end{table}

@@ -1,0 +1,21 @@
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+Method & 8k & 16k & 32k & 64k & 128k & Mean \\
+\midrule
+Raw replay $j=0$ & 100 & 96 & 99 & 94 & 97 & 97.2 \\
+CoMem & 69 & 75 & 64 & 67 & 70 & 69.0 \\
+CoMem (without LoRA) & 0 & 0 & 1 & 0 & 0 & 0.2 \\
+KV-Direct & 100 & 96 & 92 & 38 & 0 & 65.2 \\
+StreamingLLM & 86 & 34 & 18 & 10 & 6 & 30.8 \\
+InfLLM & 60 & 30 & 12 & 4 & 2 & 21.6 \\
+MemoryLLM$^\dagger$ & 22 & 22 & 16 & 6 & 2 & 13.6 \\
+HCache-style$^{\ddagger}$ & 0 & 0 & 0 & 0 & 0 & 0.0 \\
+\bottomrule
+\end{tabular}
+\caption{Both CoMem variants use $j=12$. LongEval numeric-answer accuracy, $n=100$ per length. Raw replay entries are measured length-specific scores. KV-Direct is unextended. $^\dagger$MemoryLLM uses its different released chat-tuned backbone. $^{\ddagger}$HCache-style uses a retrieval-free checkpoint distinct from the same-split adapter diagnostic.}
+\label{tab:longeval-detail}
+\end{table}
