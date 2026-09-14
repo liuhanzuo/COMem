@@ -1,8 +1,11 @@
-\section{CoMem: a Write--Read interface}
+\section{MidCache: a Write--Read interface}
 \label{sec:method}
-CoMem implements the encoder--cache--reader view within one decoder: the lower prefix encodes document chunks for persistent reuse, and the upper suffix reads selected encodings with the current query. Both parts use the original transformer blocks.
+MidCache implements the encoder--cache--reader view within one decoder: the lower prefix encodes document chunks for persistent reuse, and the upper suffix reads selected encodings with the current query. Both parts use the original transformer blocks.
 \input{figures/architecture}
 Let a decoder have $L$ blocks, hidden width $d$, and half-open layer ranges. The residual $h_j$ is the input to block $j$, after blocks $[0{:}j)$ have run. A document of $N$ tokens is divided into chunks $x_i$ of at most $c$ tokens. The split $j$, chunk size $c$, and retrieval budget $k$ define the reusable interface.
+
+\paragraph{Choosing the split.}
+The principal Qwen3-8B configuration uses $j=12$, prepaying 12 of 36 blocks and leaving 24 for Read. Section~\ref{sec:depth-choice} explains this operating choice with a depth sweep; Appendix~\ref{app:split-choice} specifies the implementation's default rule.
 
 \subsection{Write once, Read across queries}
 \label{sec:interface}

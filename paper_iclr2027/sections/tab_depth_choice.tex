@@ -1,0 +1,19 @@
+\begin{table}[htbp]
+\centering
+\caption{\textbf{Depth sensitivity on Qwen3-8B.} Each split uses a separately distilled suffix adapter with different parameter counts. Read is selected-pack prefill, excluding selection, Write, fetch, and decode; speedup uses each split's own full-replay reference. Shading marks the main operating point. Full settings and uncertainty: Appendix~\ref{app:diagnostics}, Table~\ref{tab:multidepth}.}
+\label{tab:depth-choice}
+\small
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.08}
+\begin{tabularx}{\linewidth}{l*{4}{>{\raggedleft\arraybackslash}X}}
+\toprule
+Split $j$ & RULER B $\uparrow$ & LoCoMo $\uparrow$ & Read (ms) $\downarrow$ & Speedup $\uparrow$ \\
+\midrule
+6 & 98.29 & 40.38 & 830.3 & $1.166\times$ \\
+9 & 97.55 & 39.02 & 748.3 & $1.273\times$ \\
+\rowcolor{resultshade}
+\textbf{12} & 96.07 & 38.27 & 664.4 & $1.403\times$ \\
+18 & 55.41 & 28.65 & 499.5 & $1.807\times$ \\
+\bottomrule
+\end{tabularx}
+\end{table}

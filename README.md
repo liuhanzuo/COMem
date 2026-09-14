@@ -1,9 +1,11 @@
-# CoMem — Comprehension Memory
+# MidCache
+
+**Cache the Encoder Within: Reusing Intermediate Representations across LLM Queries**
 
 **Reuse lower-layer document encoding through an intermediate residual cache.**
 
 Early transformer layers act as a semantic encoder: their intermediate residuals
-carry document information that later layers can read. CoMem makes that
+carry document information that later layers can read. MidCache makes that
 computation reusable across queries by splitting a decoder into a lower encoder
 and an upper reader. This is a functional interface, not a claim that all
 understanding is completed at one universal layer.
@@ -35,12 +37,19 @@ full-source Dense without retrieval.
 The principal configuration uses Qwen3-8B, `j=12`, 512-token chunks, iterative
 BM25 top-12, and rank-32 LoRA in blocks 12–35. The backbone is frozen.
 
+The split follows the implementation's lower-third default: `round(0.33 * 36) = 12`.
+This prepays 12 blocks and leaves 24 for Read. The separately distilled depth
+sweep supports this operating point: `j=6/12/18` gives RULER
+`98.29/96.07/55.41` and Read latency `830.3/664.4/499.5 ms`.
+This is a practical quality/cost choice; the sweep does not establish a universal
+optimum or a split selected on a held-out validation benchmark.
+
 | Measurement | Result | What it establishes |
 |---|---|---|
-| Cross-benchmark CoMem accuracy | RULER 97.05; LongEval 69.0; LongBench 12.01; BABILong 50.43; LoCoMo 38.27 | Table 1's specified task/length support; the five-score mean is descriptive |
+| Cross-benchmark MidCache accuracy | RULER 97.05; LongEval 69.0; LongBench 12.01; BABILong 50.43; LoCoMo 38.27 | Table 1's specified task/length support; the five-score mean is descriptive |
 | Same-evidence, same-adapter H20 depth control | 1.403× selected-pack prefill speedup; RULER 99.19 → 96.07 | Saved lower-layer encoding with a 3.12-point quality cost on a separately sampled paired cohort |
 | bf16 persistent payload | 8 KiB/token residual versus 144 KiB/token full-depth KV | 1/18 of KV payload storage, not a GPU-peak ratio |
-| RTX 5090 full-source comparison, 28 GB cap | Dense OOM at 32k/128k; CoMem completes | End-to-end cost includes document preparation and 128 output tokens; OOMs have no numerical speedup |
+| RTX 5090 full-source comparison, 28 GB cap | Dense OOM at 32k/128k; MidCache completes | End-to-end cost includes document preparation and 128 output tokens; OOMs have no numerical speedup |
 
 Cache fidelity is task-dependent. The no-LoRA interface performs poorly on
 several tasks; full-depth replay can remain preferable even with fewer selected
@@ -64,6 +73,8 @@ pip install -r requirements.txt
 Requires a local causal-LM checkpoint (Llama-3-8B, Qwen3-8B, or an in-tree MoE).
 
 ## Minimal use
+
+The released Python interface is `comem.CoMem`; the paper refers to the method as MidCache.
 
 ```python
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -146,7 +157,7 @@ EXPERIMENTS.md   # experiment -> paper table -> CLI flag provenance index
 
 For the current manuscript, use explicit `--j 12`, `--selector iter_bm25`,
 `--topk 12`, and the principal `--adapter` instead of automatic task routing.
-Use `--adapter none` for CoMem without LoRA. The exact no-adapter remeasurement
+Use `--adapter none` for MidCache without LoRA. The exact no-adapter remeasurement
 and supplementary protocols are in [`exp/README.md`](exp/README.md); synthetic
 cohorts and natural-task generation limits are specified in the paper appendix.
 
@@ -246,14 +257,14 @@ LoRA distillation: `train/distill.py` then eval with `--adapter <dir>`.
 
 | `--baseline`               | What it is                                                                                                                                | Stored per token |
 |----------------------------|-------------------------------------------------------------------------------------------------------------------------------------------|------------------|
-| `none`                     | CoMem itself (retrieval + fixed read at `--j`)                                                                                             | one depth-`j` residual (8 KiB on Qwen3-8B) |
-| `kvdirect` / `hcache`      | no-retrieval CoMem packs (**all** chunks; read grows O(context))                                                                            | — |
+| `none`                     | MidCache itself (retrieval + fixed read at `--j`)                                                                                             | one depth-`j` residual (8 KiB on Qwen3-8B) |
+| `kvdirect` / `hcache`      | no-retrieval MidCache packs (**all** chunks; read grows O(context))                                                                            | — |
 | `dense`                    | stock full-context generation                                                                                                              | — (full prefill each query) |
 | `streamingllm`             | sink + sliding-window truncation, then dense                                                                                               | — |
 | `snapkv` / `pyramidkv`     | prefill-then-compress KV: **full (exact) prefill**, then evict to `--kv_budget` retained tokens/layer and decode from it (`comem.kvcompress`) | bounded KV, but the whole prompt is still prefilled |
-| `cacheblend`               | CacheBlend-style full-depth chunk KV: same selector/pack/sink as CoMem, but caches every layer's chunk K/V, reindexes RoPE and recomputes a `--recompute_ratio` slice (`comem.cacheblend`) | full `L`-layer KV (144 KiB on Qwen3-8B, 18× CoMem) |
+| `cacheblend`               | CacheBlend-style full-depth chunk KV: same selector/pack/sink as MidCache, but caches every layer's chunk K/V, reindexes RoPE and recomputes a `--recompute_ratio` slice (`comem.cacheblend`) | full `L`-layer KV (144 KiB on Qwen3-8B, 18× MidCache) |
 
-`snapkv`/`pyramidkv` default to `--kv_budget 6657` = CoMem's read pack
+`snapkv`/`pyramidkv` default to `--kv_budget 6657` = MidCache's read pack
 (BOS 1 + top-12 × 512 + query ≤ 512), which makes the quality row an
 equal-retained-token diagnostic. `cacheblend` does **not** compress storage — it
 caches the same bytes as a full KV cache and wins only on prefill/TTFT, so report

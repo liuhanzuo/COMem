@@ -4,7 +4,7 @@
 \setlength{\tabcolsep}{4pt}
 \begin{tabular}{@{}lrrrrr@{}}
 \toprule
-Length & Full s & CoMem s & Ratio & Full GB & CoMem GB \\
+Length & Full s & MidCache s & Ratio & Full GB & MidCache GB \\
 \midrule
 8k & .165 & .309 & .53 & 19.92 & 17.60 \\
 16k & .356 & .441 & .81 & 24.55 & 17.67 \\
@@ -13,6 +13,6 @@ Length & Full s & CoMem s & Ratio & Full GB & CoMem GB \\
 128k & 6.035 & 2.202 & 2.74 & 89.39 & 18.54 \\
 \bottomrule
 \end{tabular}
-\caption{Same-adapter Write-inclusive pipeline on one B200. Ratio is full time divided by CoMem time. Full processes the entire source; CoMem includes document Write, CPU retrieval, query Write, and upper-layer Read. Index construction and external I/O are excluded. Memory is peak GPU allocation.}
+\caption{Same-adapter Write-inclusive pipeline on one B200. Ratio is full time divided by MidCache time. Full processes the entire source; MidCache includes document Write, CPU retrieval, query Write, and upper-layer Read. Index construction and external I/O are excluded. Memory is peak GPU allocation.}
 \label{tab:pipeline-lengths}
 \end{table}

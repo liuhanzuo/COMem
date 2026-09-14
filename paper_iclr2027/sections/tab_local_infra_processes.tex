@@ -7,16 +7,16 @@
 Source & Method ($k$) & Phase & Process 1 & Process 2 & Process 3 & Peak GB\\
 \midrule
 32k & Replay (12) & Prefill & 835.1 & 836.3 & 835.0 & 19.01\\
-32k & CoMem (12) & Prefill & 611.9 & 611.5 & 611.8 & 18.68\\
+32k & MidCache (12) & Prefill & 611.9 & 611.5 & 611.8 & 18.68\\
 32k & Replay (12) & TTFT & 867.7 & 867.7 & 868.5 & 19.01\\
-32k & CoMem (12) & TTFT & 667.5 & 666.7 & 667.6 & 18.71\\
+32k & MidCache (12) & TTFT & 667.5 & 666.7 & 667.6 & 18.71\\
 \midrule
 128k & Replay (12) & Prefill & 875.1 & 882.4 & 835.9 & 19.01\\
-128k & CoMem (12) & Prefill & 638.8 & 620.3 & 616.6 & 18.68\\
+128k & MidCache (12) & Prefill & 638.8 & 620.3 & 616.6 & 18.68\\
 128k & Replay (12) & TTFT & 972.1 & 1008.6 & 957.7 & 19.01\\
-128k & CoMem (12) & TTFT & 768.6 & 796.5 & 760.1 & 18.71\\
+128k & MidCache (12) & TTFT & 768.6 & 796.5 & 760.1 & 18.71\\
 \bottomrule
 \end{tabular}
-\caption{RTX 5090 same-evidence depth diagnostic, separate from full-source Dense. Each process latency is the median over three documents and twenty formal repetitions per document, in milliseconds. The CoMem main-table latency is the median of these process medians; memory is the maximum allocated peak over all 180 formal observations per source length, method, and phase. Both methods use the same top-12 selected pack of 6,657 tokens and the same principal adapter; this cost workload supplies no accuracy evidence.}
+\caption{RTX 5090 same-evidence depth diagnostic, separate from full-source Dense. Each process latency is the median over three documents and twenty formal repetitions per document, in milliseconds. The MidCache main-table latency is the median of these process medians; memory is the maximum allocated peak over all 180 formal observations per source length, method, and phase. Both methods use the same top-12 selected pack of 6,657 tokens and the same principal adapter; this cost workload supplies no accuracy evidence.}
 \label{tab:local-infra-processes}
 \end{table}

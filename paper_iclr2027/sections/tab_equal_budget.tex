@@ -6,12 +6,12 @@
 \toprule
 Method & Task & 8k & 16k & 32k & 64k & 128k \\
 \midrule
-CoMem & single-2 & 100 & 100 & 99 & 99 & 100 \\
-CoMem & tracking & 96.6 & 97.6 & 98.8 & 99.0 & 95.8 \\
+MidCache & single-2 & 100 & 100 & 99 & 99 & 100 \\
+MidCache & tracking & 96.6 & 97.6 & 98.8 & 99.0 & 95.8 \\
 StreamingLLM & single & 85 & 36 & 20 & 10 & 2 \\
 StreamingLLM & tracking & 41.8 & 2.2 & 0.6 & 0.2 & 0.8 \\
 \bottomrule
 \end{tabular}
-\caption{The same nominal approximately 6.5k-token budget and scorer, with $n=100$ per cell. CoMem retrieves relevant chunks; StreamingLLM retains recent tokens. The examples are not established as paired.}
+\caption{The same nominal approximately 6.5k-token budget and scorer, with $n=100$ per cell. MidCache retrieves relevant chunks; StreamingLLM retains recent tokens. The examples are not established as paired.}
 \label{tab:equal-budget}
 \end{table}

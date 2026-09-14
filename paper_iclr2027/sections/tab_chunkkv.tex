@@ -10,13 +10,13 @@ Method & adapter & 8k & 16k & 32k & Mean & F1 & KiB/token \\
 \midrule
 Replay & off & 85 & 83 & 85 & 84.33 & 6.98 & .008 \\
 Chunk-KV & off & 73 & 75 & 71 & 73.00 & 4.88 & 144 \\
-CoMem (without LoRA) & off & 0 & 0 & 0 & 0.00 & 10.45 & 8 \\
+MidCache (without LoRA) & off & 0 & 0 & 0 & 0.00 & 10.45 & 8 \\
 \midrule
 Replay & on & 80 & 77 & 76 & 77.67 & 4.65 & .008 \\
 Chunk-KV & on & 59 & 62 & 46 & 55.67 & 3.68 & 144 \\
-CoMem & on & 71 & 74 & 73 & 72.67 & 11.37 & 8 \\
+MidCache & on & 71 & 74 & 73 & 72.67 & 11.37 & 8 \\
 \bottomrule
 \end{tabular}
-\caption{Matched evidence and explicit adapter control: 500 samples and 3,000 predictions, with 100 examples per LongEval length and all 200 Qasper examples. Both CoMem configurations use $j=12$ and $w=0$. Each path is evaluated with the same principal suffix adapter enabled or disabled; the adapter is trained for CoMem, not separately for the other paths. Chunk-KV is a CacheBlend-style reference with the first two layers fully recomputed and a fixed 15\% context-token set recomputed above them. Payload excludes the retrieval index and request-local KV; replay stores int64 IDs. These are quality measurements, not native-system latency comparisons.}
+\caption{Matched evidence and explicit adapter control: 500 samples and 3,000 predictions, with 100 examples per LongEval length and all 200 Qasper examples. Both MidCache configurations use $j=12$ and $w=0$. Each path is evaluated with the same principal suffix adapter enabled or disabled; the adapter is trained for MidCache, not separately for the other paths. Chunk-KV is a CacheBlend-style reference with the first two layers fully recomputed and a fixed 15\% context-token set recomputed above them. Payload excludes the retrieval index and request-local KV; replay stores int64 IDs. These are quality measurements, not native-system latency comparisons.}
 \label{tab:chunkkv}
 \end{table}

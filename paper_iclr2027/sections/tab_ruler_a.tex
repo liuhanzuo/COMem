@@ -6,11 +6,11 @@
 \toprule
 Method & Task & 8k & 16k & 32k & 64k & 128k \\
 \midrule
-CoMem & single-2 & 100 & 100 & 99 & 99 & 100 \\
+MidCache & single-2 & 100 & 100 & 99 & 99 & 100 \\
  & multikey & 95 & 94 & 97 & 91 & 93 \\
  & tracking & 96.6 & 97.6 & 98.8 & 99.0 & 95.8 \\
 \midrule
-CoMem (without LoRA) & single-2 & 27.0 & 46.0 & 48.0 & 54.0 & 41.0 \\
+MidCache (without LoRA) & single-2 & 27.0 & 46.0 & 48.0 & 54.0 & 41.0 \\
  & multikey & 2.0 & 6.0 & 5.0 & 7.0 & 13.0 \\
  & tracking & 2.0 & 1.4 & 0.0 & 0.2 & 0.4 \\
 \midrule
@@ -35,6 +35,6 @@ HCache-style$^{\ddagger}$ & single & 33 & 5 & 3 & 0 & 0 \\
  & tracking & 1.6 & 1.0 & 0.4 & 0 & 0 \\
 \bottomrule
 \end{tabular}
-\caption{Both CoMem variants use $j=12$. RULER Cohort A: 100 examples per cell, official scorer, and no chat template. The single-needle variant is single-2 for the cohort despite abbreviated labels. CoMem macro is 97.05. KV-Direct uses native RoPE without YaRN. $^\dagger$MemoryLLM uses a different chat-tuned backbone. $^{\ddagger}$HCache-style uses a retrieval-free checkpoint distinct from the same-split adapter diagnostic.}
+\caption{Both MidCache variants use $j=12$. RULER Cohort A: 100 examples per cell, official scorer, and no chat template. The single-needle variant is single-2 for the cohort despite abbreviated labels. MidCache macro is 97.05. KV-Direct uses native RoPE without YaRN. $^\dagger$MemoryLLM uses a different chat-tuned backbone. $^{\ddagger}$HCache-style uses a retrieval-free checkpoint distinct from the same-split adapter diagnostic.}
 \label{tab:ruler-a}
 \end{table}

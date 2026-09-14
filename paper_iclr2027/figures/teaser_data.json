@@ -11,12 +11,12 @@
   "retained_comem_cap_GB": 26,
   "aggregation": "median of three process medians; memory is maximum formal allocated peak",
   "whiskers": "range of three process medians, not confidence intervals",
-  "ttft": "pretokenized query through first logits; retrieval/fetch/query Write included for CoMem, document Write excluded",
-  "e2e": "fresh full-source preparation (all document Write for CoMem) through 128 generated IDs; no amortization",
+  "ttft": "pretokenized query through first logits; retrieval/fetch/query Write included for MidCache, document Write excluded",
+  "e2e": "fresh full-source preparation (all document Write for MidCache) through 128 generated IDs; no amortization",
   "excluded": "model loading, tokenization/detokenization, external I/O, queue/network",
   "oom": "actual failures; no y-value, no interpolation/extrapolation past last completed Dense point",
   "cohorts": "three unscored PG19 documents per length; same inputs within a length, different queries across lengths",
-  "repetitions": "new 8k/16k: 1 warmup + 3 repetitions per document/process; retained 32k/128k CoMem Prefill/TTFT: 5+20; retained E2E: 1+3",
+  "repetitions": "new 8k/16k: 1 warmup + 3 repetitions per document/process; retained 32k/128k MidCache Prefill/TTFT: 5+20; retained E2E: 1+3",
   "data": {
     "8192": {
       "dense": {

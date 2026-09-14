@@ -6,8 +6,8 @@
 \toprule
 Method & Mass on $S_t$ (\%) & $D_{\mathrm{KL}}(P\Vert Q)$ & $D_{\mathrm{KL}}(Q\Vert P)$ & NLL & Agreement (\%) \\
 \midrule
-CoMem (without LoRA) & 93.20 & .442 & .454 & 2.680 & 70.03 \\
-CoMem & 94.35 & .304 & .287 & 2.579 & 75.75 \\
+MidCache (without LoRA) & 93.20 & .442 & .454 & 2.680 & 70.03 \\
+MidCache & 94.35 & .304 & .287 & 2.579 & 75.75 \\
 \bottomrule
 \end{tabular}
 \caption{Post-training validation at $j=12$ on 100 windows from all 50 official PG-19 validation books (51,200 query positions per method). $P$ is the adapter-disabled full-causal teacher and $Q$ is the student; KL and next-token NLL use the full 151,936-token vocabulary. $S_t$ is the teacher's top-64 support. Agreement is next-token argmax agreement with the teacher. The teacher's mean mass on $S_t$ is 94.68\% and its NLL is 2.707. No parameters are updated.}

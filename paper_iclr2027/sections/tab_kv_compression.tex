@@ -6,12 +6,12 @@
 \toprule
 Method & Native A & Single 64/128k & MK 64/128k & VT 64/128k & LoCoMo F1/acc \\
 \midrule
-CoMem & 97.05 & 99/100 & 91/93 & 99.0/95.8 & 9.15/23.36 \\
+MidCache & 97.05 & 99/100 & 91/93 & 99.0/95.8 & 9.15/23.36 \\
 SnapKV & 72.33$^\dagger$ & 100/100 & 94/91 & 80.0/84.8 & 9.21/22.05 \\
 PyramidKV & 72.32$^\dagger$ & 100/100 & 93/89 & 88.6/86.8 & 9.13/22.10 \\
 \bottomrule
 \end{tabular}
-\caption{Retained-KV quality at an approximately 6,657-token budget. SnapKV/PyramidKV long-length columns use full-prompt factor-4 YaRN; CoMem reads selected evidence without YaRN. $^\dagger$Native means include left-truncated 64k/128k inputs; both compression methods score 99.96 on 8k--32k. Cohort A and lexical LoCoMo metrics are used.}
+\caption{Retained-KV quality at an approximately 6,657-token budget. SnapKV/PyramidKV long-length columns use full-prompt factor-4 YaRN; MidCache reads selected evidence without YaRN. $^\dagger$Native means include left-truncated 64k/128k inputs; both compression methods score 99.96 on 8k--32k. Cohort A and lexical LoCoMo metrics are used.}
 \label{tab:kv-quality}
 \end{table}
 
@@ -31,6 +31,6 @@ PyramidKV & 32k & 6,301 & 25.7 & 26.7 \\
 PyramidKV & 128k & 51,520 & 54.3 & 26.8 \\
 \bottomrule
 \end{tabular}
-\caption{Full-prefill retained-KV timing on H20, median of three with compression and 64-token generation. These methods prefill the whole source before eviction. The hardware differs from the B200 CoMem pipeline, so no cross-table speedup is inferred.}
+\caption{Full-prefill retained-KV timing on H20, median of three with compression and 64-token generation. These methods prefill the whole source before eviction. The hardware differs from the B200 MidCache pipeline, so no cross-table speedup is inferred.}
 \label{tab:kv-timing}
 \end{table}

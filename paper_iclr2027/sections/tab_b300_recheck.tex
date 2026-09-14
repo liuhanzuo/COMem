@@ -10,11 +10,11 @@ Method & Adapter & Model tokens & Latency (ms) & Peak GPU (GB)\\
 Dense & Off & 131,585 & 14,634.5 & 50.17\\
 Dense & Shared & 131,585 & 15,919.1 & 62.03\\
 Raw replay & Shared & 6,657 & 246.4 & 19.04\\
-CoMem & Shared & 6,657 & 194.8 & 18.71\\
+MidCache & Shared & 6,657 & 194.8 & 18.71\\
 \midrule
 \multicolumn{5}{l}{\textit{Selected-pack TTFT with online selection and fetch}}\\
 Raw replay & Shared & 6,657 & 428.9 & 19.04\\
-CoMem & Shared & 6,657 & 387.9 & 18.74\\
+MidCache & Shared & 6,657 & 387.9 & 18.74\\
 \bottomrule
 \end{tabular}
 \caption{B300 measurements on three fixed 128k-source PG19 workloads. Each latency is the median of three independent process medians, each over three documents and three formal repeats after one warmup. Peak GPU allocation is the maximum over all 27 formal repetitions per row, including weights. Only the full-context diagnostic disables LoRA; all principal comparisons share the same adapter. Source length, selected-pack length, and timer boundary are distinct.}

@@ -90,7 +90,7 @@ def arrays(method,phase,metric):
         else: lower.append(0); upper.append(0)
     return np.array(xs),np.array(ys),np.array([lower,upper])
 
-HANDLES=[Line2D([],[],color=BLUE,marker='o',lw=2,label='CoMem'),
+HANDLES=[Line2D([],[],color=BLUE,marker='o',lw=2,label='MidCache'),
          Line2D([],[],color=RED,marker='s',ls='--',lw=2,label='Dense')]
 
 def trend(ax,phase,metric,title,ylim,yticks,whiskers=False):

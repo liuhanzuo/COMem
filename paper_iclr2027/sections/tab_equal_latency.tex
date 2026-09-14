@@ -4,12 +4,12 @@
 \setlength{\tabcolsep}{4pt}
 \begin{tabular}{@{}lcccc@{}}
 \toprule
-Replay selector & Replay / CoMem & Delta & Hierarchical CI & LOCO range \\
+Replay selector & Replay / MidCache & Delta & Hierarchical CI & LOCO range \\
 \midrule
 Iterative BM25 & 64.78 / 53.22 & -11.56 & [-18.67, -5.11] & [-13.13, -9.50] \\
 Frozen BGE & 54.22 / 53.22 & -1.00 & [-10.67, 8.33] & [-3.50, 1.75] \\
 \bottomrule
 \end{tabular}
-\caption{Comparison at latency-calibrated maximum chunk budgets: ten for replay and twelve for CoMem. Per-cell latency on the quality mixture is unreported. Delta is CoMem minus replay, in points, averaged equally over nine cells. Hierarchical intervals are 95\%; LOCO denotes leave-one-cell-out sensitivity. Only the replay selector changes in the BGE diagnostic.}
+\caption{Comparison at latency-calibrated maximum chunk budgets: ten for replay and twelve for MidCache. Per-cell latency on the quality mixture is unreported. Delta is MidCache minus replay, in points, averaged equally over nine cells. Hierarchical intervals are 95\%; LOCO denotes leave-one-cell-out sensitivity. Only the replay selector changes in the BGE diagnostic.}
 \label{tab:equal-latency}
 \end{table}

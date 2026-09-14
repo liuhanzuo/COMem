@@ -1,4 +1,4 @@
-"""Editable publication schematic of the CoMem residual interface.
+"""Editable publication schematic of the MidCache residual interface.
 
 scientific-figure-making: thin rules, semantic blue/green, vector text.
 Labels become 7.5-8.5 pt at the manuscript's 5.5-inch width. Token glyphs

@@ -8,20 +8,20 @@ Task & Method & 8k & 16k & 32k & 64k & 128k \\
 \midrule
 Single-3 & KV-Direct & 100 & 100 & 100 & 100 & 0 \\
  & KV-Direct + YaRN & 100 & 100 & 100 & 100 & 100 \\
- & CoMem & 100 & 91 & 97 & 98 & 98 \\
- & CoMem + YaRN & 100 & 90 & 97 & 97 & 98 \\
+ & MidCache & 100 & 91 & 97 & 98 & 98 \\
+ & MidCache + YaRN & 100 & 90 & 97 & 97 & 98 \\
 \midrule
 Multikey & KV-Direct & 100 & 100 & 98 & 88 & 0 \\
  & KV-Direct + YaRN & 98 & 94 & 96 & 91 & 89 \\
- & CoMem & 94 & 91 & 99 & 90 & 93 \\
- & CoMem + YaRN & 82 & 85 & 94 & 88 & 93 \\
+ & MidCache & 94 & 91 & 99 & 90 & 93 \\
+ & MidCache + YaRN & 82 & 85 & 94 & 88 & 93 \\
 \midrule
 Tracking & KV-Direct & 100 & 100 & 99.8 & 96.2 & 0 \\
  & KV-Direct + YaRN & 99.2 & 99.4 & 26.6 & 67.2 & 57.8 \\
- & CoMem & 96.2 & 98.0 & 98.2 & 98.6 & 99.0 \\
- & CoMem + YaRN & 88.6 & 90.0 & 89.4 & 95.0 & 93.6 \\
+ & MidCache & 96.2 & 98.0 & 98.2 & 98.6 & 99.0 \\
+ & MidCache + YaRN & 88.6 & 90.0 & 89.4 & 95.0 & 93.6 \\
 \bottomrule
 \end{tabular}
-\caption{RULER Cohort B with matched support ($n=100$ per cell). YaRN factor four yields an effective 163,840-token window. CoMem without YaRN averages $1441.0/15=96.0667$ over its 15 cells. These are the CoMem cells used in the principal paired depth comparison; Cohort A is kept separate.}
+\caption{RULER Cohort B with matched support ($n=100$ per cell). YaRN factor four yields an effective 163,840-token window. MidCache without YaRN averages $1441.0/15=96.0667$ over its 15 cells. These are the MidCache cells used in the principal paired depth comparison; Cohort A is kept separate.}
 \label{tab:ruler-b}
 \end{table}

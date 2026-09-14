@@ -7,9 +7,9 @@
 Source & Method & Process 1 & Process 2 & Process 3 & E2E$_{128}$ & Peak GB\\
 \midrule
 32k & Raw replay & 6810.1 & 6504.1 & 7127.9 & 6810.1 & 19.01\\
-32k & CoMem & 7021.3 & 7026.1 & 7938.1 & 7026.1 & 18.71\\
+32k & MidCache & 7021.3 & 7026.1 & 7938.1 & 7026.1 & 18.71\\
 128k & Raw replay & 6835.7 & 6916.4 & 6684.6 & 6835.7 & 19.01\\
-128k & CoMem & 11426.8 & 11491.2 & 11241.1 & 11426.8 & 18.71\\
+128k & MidCache & 11426.8 & 11491.2 & 11241.1 & 11426.8 & 18.71\\
 \bottomrule
 \end{tabular}
 \caption{RTX 5090 same-evidence E2E diagnostic, distinct from full-source Dense, including document preparation and a fixed 128-token output. Times are milliseconds. Each process median covers three documents and three formal requests per document after one warmup; E2E is the median across three independent processes (27 requests per row). Full-request GPU peaks are separate from the Prefill/TTFT peaks in Table~\ref{tab:infra}.}
