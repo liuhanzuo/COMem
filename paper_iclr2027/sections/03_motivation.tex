@@ -1,4 +1,4 @@
-\section{Early Layers as a Reusable Semantic Encoder}
+\section{Motivation}
 \label{sec:motivation}
 \paragraph{Semantic information is available before the final readout.}
 The lower transformer blocks encode token identity and context into a residual representation that subsequent blocks refine for prediction, consistent with layerwise studies of feature construction and readout \citep{stagesofinference}. Our probes on SST2, WiC, and RTE examine information accessible from these states. SST2 probe accuracy peaks near 0.90, compared with approximately 0.71 for lexical features (Appendix~\ref{app:semantic-probes}). This motivates treating the lower prefix as a semantic encoder whose output can be cached before the final LM head. The claim concerns accessible representations, not a universal depth at which understanding is complete.
