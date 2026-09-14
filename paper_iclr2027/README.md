@@ -29,6 +29,8 @@ pdflatex -no-shell-escape -interaction=nonstopmode -halt-on-error main.tex
 
 Keep the bundled ICLR style and bibliography files beside `main.tex`. The anonymous setting is active.
 
+The Reproducibility statement links to the [anonymous code repository](https://anonymous.4open.science/r/COMem-Anonymous/). The AI use statement discloses assistance with writing, literature retrieval, and supplementary experiment implementation, execution, and analysis.
+
 Literature citations use clickable blue square-bracket numbers, such as [1] and [2], with the bibliography numbered in order of first citation. The author-requested numeric format uses bundled `unsrtnat.bst` and a preamble override; the ICLR layout style remains unmodified. Figure/table and section references also link to their PDF destinations. Bibliography URLs are clickable where provided.
 
 ## Figures
